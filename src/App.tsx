@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { useTensorFlowModel } from './hooks/useTensorFlowModel';
+import { useYoloModel } from './hooks/useYoloModel';
 import { useWebcam } from './hooks/useWebcam';
 import { Header } from './components/Header';
 import { DetectionView } from './components/DetectionView';
@@ -8,7 +8,7 @@ import './App.css';
 const App: React.FC = () => {
   const [bookCount, setBookCount] = useState(0);
   
-  const { model, isModelLoaded, error: modelError } = useTensorFlowModel();
+  const { model, isModelLoaded, device, error: modelError } = useYoloModel();
   const { stream, isCameraActive, cameraError, facingMode, startCamera, toggleCamera } = useWebcam();
 
   const handleBookCountChange = useCallback((count: number) => {
@@ -31,7 +31,9 @@ const App: React.FC = () => {
             {!isModelLoaded ? (
               <div className="loader">Carregando IA...</div>
             ) : (
-              <div className="ready-text">Pronto para iniciar</div>
+              <div className="ready-text">
+                Pronto para iniciar{device ? ` (${device})` : ''}
+              </div>
             )}
           </div>
         )}

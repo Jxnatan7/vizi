@@ -7,6 +7,22 @@
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>vizi</title>
+
+  <!--
+    O @ultralytics/yolo carrega o backend .tflite por um especificador indireto,
+    marcado com @vite-ignore, que o bundler nunca reescreve de propósito. O
+    navegador recebe o nome cru do pacote, então quem resolve é este import map.
+    O bundle +esm do jsDelivr já traz o @litertjs/wasm-utils embutido, por isso
+    uma entrada basta. Precisa vir antes do primeiro modulo da pagina.
+    A versao aqui deve acompanhar a do package.json (fixada, sem ^).
+  -->
+  <script type="importmap">
+    {
+      "imports": {
+        "@litertjs/core": "https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.3/+esm"
+      }
+    }
+  </script>
 </head>
 
 <body>

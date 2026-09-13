@@ -73,3 +73,26 @@ export default defineConfig([
 ])
 
 ```
+
+## Modelo de detecção
+
+O app roda um YOLOv8 próprio (`public/models/yolo.tflite`) no browser via
+[`@ultralytics/yolo`](https://www.npmjs.com/package/@ultralytics/yolo), que
+executa `.tflite` através do LiteRT.js.
+
+- **Classe única:** `Bookshelf-counter` (nome de exibição em `DetectionView.tsx`).
+- **Metadata embutido:** `task`, `names` e `imgsz` são lidos de um ZIP anexado ao
+  fim do próprio `.tflite`. Qualquer proxy/CDN que recomprima ou trunque o
+  arquivo quebra `model.names` — o arquivo precisa ser servido byte a byte.
+- **Device:** `auto` (WebGPU quando disponível, senão CPU/wasm). O device que
+  rodou de fato aparece na tela inicial.
+- **Import map (`index.html`):** o `@ultralytics/yolo` importa o `@litertjs/core`
+  por especificador indireto marcado com `@vite-ignore`, então o bundler não o
+  resolve — quem resolve é o import map. Sem ele o app quebra com
+  `Failed to resolve module specifier '@litertjs/core'`, tanto em dev quanto em
+  produção. A versão no import map precisa acompanhar a do `package.json`.
+- **WASM:** os binários do LiteRT vêm do CDN padrão (jsDelivr). Se um dia a
+  página ficar `cross-origin-isolated` (COOP/COEP), o CDN para de funcionar e é
+  preciso self-hostar `node_modules/@litertjs/core/wasm/` apontando
+  `litertWasmUrl` no `YOLO.load()`.
+- **Licença:** `@ultralytics/yolo` e o modelo exportado são AGPL-3.0.

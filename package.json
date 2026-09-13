@@ -10,9 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@tensorflow-models/coco-ssd": "^2.2.3",
-    "@tensorflow/tfjs": "^4.22.0",
-    "@tensorflow/tfjs-backend-webgl": "^4.22.0",
+    "@litertjs/core": "2.5.3",
+    "@ultralytics/yolo": "0.0.44",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
