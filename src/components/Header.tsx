@@ -6,9 +6,15 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ bookCount }) => {
   return (
-    <header className="header">
-      <h1>Book Detector AI</h1>
-      <div className="tag">Books detected: {bookCount}</div>
+    <header className="top-bar">
+      <div>
+        <h1 className="app-title">BookAI</h1>
+        <p className="app-subtitle">Detecção em tempo real</p>
+      </div>
+      <div className={`count-badge ${bookCount > 0 ? 'active' : ''}`}>
+        <span className="count-number">{bookCount}</span>
+        <span className="count-label">Livros</span>
+      </div>
     </header>
   );
 };
