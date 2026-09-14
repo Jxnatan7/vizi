@@ -3,16 +3,36 @@ import { useYoloModel } from './hooks/useYoloModel';
 import { useWebcam } from './hooks/useWebcam';
 import { Header } from './components/Header';
 import { DetectionView } from './components/DetectionView';
+import { OverlayControls } from './components/OverlayControls';
+import { DiagnosticsPanel, type Diagnostics } from './components/DiagnosticsPanel';
+import { debugEnabled, deviceOverride } from './lib/debugFlags';
 import './App.css';
 
 const App: React.FC = () => {
   const [bookCount, setBookCount] = useState(0);
-  
-  const { model, isModelLoaded, device, error: modelError } = useYoloModel();
+
+  // Exibição do overlay. Não persiste entre sessões: volta ao padrão a cada
+  // abertura do app.
+  const [showBoxes, setShowBoxes] = useState(true);
+  const [showMasks, setShowMasks] = useState(true);
+  const [maskOpacity, setMaskOpacity] = useState(1);
+
+  // Padrão do Ultralytics. Permissivo para um modelo de classe única, mas é o
+  // valor que a validação em Python usa — calibre com ?debug=1 e fixe aqui.
+  const [confidence, setConfidence] = useState(0.25);
+
+  const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
+
+  const { model, isModelLoaded, device, task, names, error: modelError } = useYoloModel(deviceOverride);
   const { stream, isCameraActive, cameraError, facingMode, startCamera, toggleCamera } = useWebcam();
 
   const handleBookCountChange = useCallback((count: number) => {
     setBookCount(count);
+  }, []);
+
+  // Sem ?debug=1 a prop fica indefinida e o loop nem monta o objeto.
+  const handleDiagnostics = useCallback((next: Diagnostics) => {
+    setDiagnostics(next);
   }, []);
 
   return (
@@ -20,11 +40,16 @@ const App: React.FC = () => {
       {/* Camada de Fundo: Câmera (Sempre presente, tela preta se inativa) */}
       <div className="background-layer">
         {isCameraActive && model && stream ? (
-          <DetectionView 
-            model={model} 
-            stream={stream} 
+          <DetectionView
+            model={model}
+            stream={stream}
             facingMode={facingMode}
-            onBookCountChange={handleBookCountChange} 
+            showBoxes={showBoxes}
+            showMasks={showMasks}
+            maskOpacity={maskOpacity}
+            confidence={confidence}
+            onBookCountChange={handleBookCountChange}
+            onDiagnostics={debugEnabled ? handleDiagnostics : undefined}
           />
         ) : (
           <div className="camera-placeholder">
@@ -43,6 +68,10 @@ const App: React.FC = () => {
       <div className="ui-layer">
         <Header bookCount={bookCount} />
 
+        {debugEnabled && (
+          <DiagnosticsPanel device={device} task={task} names={names} diagnostics={diagnostics} />
+        )}
+
         {/* Centro da tela: Erros, se houver */}
         <div className="center-content">
           {(cameraError || modelError) && (
@@ -54,6 +83,20 @@ const App: React.FC = () => {
 
         {/* Rodapé: Controles flutuantes */}
         <div className="bottom-controls">
+          {isCameraActive && (
+            <OverlayControls
+              showBoxes={showBoxes}
+              showMasks={showMasks}
+              maskOpacity={maskOpacity}
+              canSegment={task === 'segment'}
+              confidence={confidence}
+              onConfidenceChange={debugEnabled ? setConfidence : undefined}
+              onShowBoxesChange={setShowBoxes}
+              onShowMasksChange={setShowMasks}
+              onMaskOpacityChange={setMaskOpacity}
+            />
+          )}
+
           {isModelLoaded && !isCameraActive && (
             <button className="fab-btn primary" onClick={() => startCamera('environment')}>
               Ativar Câmera

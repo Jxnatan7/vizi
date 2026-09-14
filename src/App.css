@@ -153,8 +153,11 @@ html, body, #root {
   padding-bottom: max(env(safe-area-inset-bottom, 30px), 30px);
   background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
   display: flex;
+  /* Empilha o painel de exibição por cima dos botões de ação */
+  flex-direction: column;
   justify-content: center;
   align-items: center;
+  gap: 16px;
   pointer-events: auto;
 }
 
@@ -188,4 +191,101 @@ html, body, #root {
   backdrop-filter: blur(10px);
   color: white;
   border: 1px solid rgba(255,255,255,0.1);
+}
+/* --- Painel de Exibição (Caixas / Segmentação) --- */
+.overlay-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 340px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+.overlay-toggles {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.overlay-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  /* Alvo de toque confortável no mobile sem inchar o painel */
+  padding: 4px 0;
+}
+
+.overlay-toggle input {
+  width: 20px;
+  height: 20px;
+  accent-color: #28a745;
+  cursor: pointer;
+}
+
+.overlay-slider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #ddd;
+}
+
+.overlay-slider input {
+  flex: 1;
+  accent-color: #28a745;
+  cursor: pointer;
+}
+
+/* Modelo sem segmentação, ou máscara desligada: o controle continua visível
+   para não fazer o painel pular de altura, mas apagado. */
+.overlay-toggle.disabled,
+.overlay-slider.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.overlay-toggle.disabled input,
+.overlay-slider.disabled input {
+  cursor: not-allowed;
+}
+
+/* --- Painel de Diagnóstico (?debug=1) --- */
+.diagnostics-panel {
+  align-self: flex-start;
+  margin: 0 20px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  /* Precisa ser selecionável para copiar o erro do celular */
+  pointer-events: auto;
+  user-select: text;
+  max-width: calc(100% - 40px);
+}
+
+.diagnostics-panel strong {
+  display: inline-block;
+  min-width: 56px;
+  color: #8fd19e;
+  font-weight: 600;
+}
+
+.diagnostics-error {
+  margin-top: 6px;
+  color: #ff8a8a;
+  word-break: break-word;
 }
