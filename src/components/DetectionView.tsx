@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
-import type { Box, YOLO } from '@ultralytics/yolo';
+import type { YOLO } from '@ultralytics/yolo';
 import type { FacingMode } from '../hooks/useWebcam';
+import { createTracker, type TrackedBox } from '../lib/tracker';
 
 // Padrão do Ultralytics — mesmo comportamento da validação em Python.
 const CONFIDENCE_THRESHOLD = 0.25;
@@ -13,36 +14,30 @@ const DETECTION_INTERVAL_MS = 100;
 // Sem isso o número pisca a cada tremida da câmera.
 const COUNT_STABILITY_FRAMES = 3;
 
-// Nomes de exibição por classe do modelo. A chave vem do metadata do .tflite.
-const DISPLAY_NAMES: Record<string, string> = {
-  'Bookshelf-counter': 'Estante',
-};
-
-const drawBoundingBoxes = (boxes: Box[], ctx: CanvasRenderingContext2D) => {
+const drawBoundingBoxes = (tracked: TrackedBox[], ctx: CanvasRenderingContext2D) => {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-  boxes.forEach((box) => {
+  tracked.forEach(({ id, box }) => {
     // A lib devolve xyxy em pixels; o canvas desenha a partir de x/y + tamanho.
     const x = box.x1;
     const y = box.y1;
     const width = box.x2 - box.x1;
     const height = box.y2 - box.y1;
-    const label = DISPLAY_NAMES[box.name] ?? box.name;
-    const scoreText = `${label} - ${Math.round(box.conf * 100)}%`;
+    const label = `#${id}`;
 
     ctx.strokeStyle = '#00FF00';
     ctx.lineWidth = 4;
     ctx.strokeRect(x, y, width, height);
 
     ctx.font = '16px Arial';
-    const textWidth = ctx.measureText(scoreText).width;
+    const textWidth = ctx.measureText(label).width;
     const textHeight = 24;
 
     ctx.fillStyle = '#00FF00';
     ctx.fillRect(x, y - textHeight, textWidth + 10, textHeight);
 
     ctx.fillStyle = '#000000';
-    ctx.fillText(scoreText, x + 5, y - 6);
+    ctx.fillText(label, x + 5, y - 6);
   });
 };
 
@@ -81,6 +76,10 @@ export const DetectionView: React.FC<DetectionViewProps> = ({
     let publishedCount = 0;
     let candidateCount = 0;
     let candidateStreak = 0;
+
+    // Identidade das entidades. Nasce e morre com o loop: trocar de lente
+    // remonta o componente com outra stream, o que reinicia a numeração.
+    const tracker = createTracker();
 
     // Só promove a contagem depois de COUNT_STABILITY_FRAMES leituras iguais
     const publishStableCount = (count: number) => {
@@ -135,10 +134,12 @@ export const DetectionView: React.FC<DetectionViewProps> = ({
         if (!isActive) return;
 
         lastDetectionAt = performance.now();
-        publishStableCount(results.boxes.length);
+
+        const tracked = tracker.update(results.boxes);
+        publishStableCount(tracked.length);
 
         const ctx = canvas.getContext('2d');
-        if (ctx) drawBoundingBoxes(results.boxes, ctx);
+        if (ctx) drawBoundingBoxes(tracked, ctx);
       } catch (err) {
         console.error('Falha na inferência:', err);
       } finally {
@@ -154,7 +155,7 @@ export const DetectionView: React.FC<DetectionViewProps> = ({
       isActive = false;
       if (frameId) cancelAnimationFrame(frameId);
     };
-  }, [model, onBookCountChange]);
+  }, [model, stream, onBookCountChange]);
 
   const mirrorStyle = { transform: facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)' };
 
