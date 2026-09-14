@@ -9,20 +9,43 @@
   <title>vizi</title>
 
   <!--
-    O @ultralytics/yolo carrega o backend .tflite por um especificador indireto,
-    marcado com @vite-ignore, que o bundler nunca reescreve de propósito. O
-    navegador recebe o nome cru do pacote, então quem resolve é este import map.
-    O bundle +esm do jsDelivr já traz o @litertjs/wasm-utils embutido, por isso
-    uma entrada basta. Precisa vir antes do primeiro modulo da pagina.
-    A versao aqui deve acompanhar a do package.json (fixada, sem ^).
+    O modelo tem 13 MB e nada acontece no app antes dele. Sem esta dica o
+    download só começa depois que o bundle JS carrega, executa e monta o
+    componente; com ela, os dois baixam em paralelo.
+
+    É um script inline, e não uma tag estática, porque `?model=` escolhe entre
+    variantes (320 vs 640) — um preload fixo baixaria 13 MB do arquivo errado
+    sempre que a comparação fosse rodada. Inline no <head> preserva o
+    paralelismo: roda antes do bundle, ao contrário de um preload injetado pelo
+    próprio bundle.
+
+    `as="fetch"` + `crossorigin` são o par que faz o preload casar com o fetch
+    que o @ultralytics/yolo realmente emite — sem eles o browser baixa duas
+    vezes e avisa no console.
+
+    ⚠️ A lista de variantes duplica MODEL_URLS de src/lib/debugFlags.ts. É a
+    única duplicação aceita aqui, porque o preload precisa acontecer antes de
+    qualquer módulo carregar. Mexer numa exige mexer na outra.
   -->
-  <script type="importmap">
-    {
-      "imports": {
-        "@litertjs/core": "https://cdn.jsdelivr.net/npm/@litertjs/core@2.5.3/+esm"
-      }
-    }
+  <script>
+    (function () {
+      var MODELS = {
+        high: '/models/best-high.tflite',
+        low: '/models/best-low.tflite',
+        v1: '/models/yolo-seg.tflite'
+      };
+      var requested = new URLSearchParams(location.search).get('model');
+      var href = MODELS[requested] || MODELS.high;
+
+      var link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'fetch';
+      link.crossOrigin = 'anonymous';
+      link.href = href;
+      document.head.appendChild(link);
+    })();
   </script>
+
 </head>
 
 <body>

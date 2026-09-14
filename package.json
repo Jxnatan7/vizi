@@ -4,9 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "vendor": "mkdir -p public/litert && cp node_modules/@litertjs/core/wasm/* public/litert/",
+    "predev": "npm run vendor",
     "dev": "vite",
+    "prebuild": "npm run vendor",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "prepreview": "npm run vendor",
     "preview": "vite preview"
   },
   "dependencies": {

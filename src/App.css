@@ -50,6 +50,27 @@ html, body, #root {
   pointer-events: none;
 }
 
+/* Camada da máscara. A opacidade é propriedade CSS de propósito: mexer no
+   slider vira trabalho de compositor, sem repintar canvas nenhum e sem
+   precisar de uma nova inferência para refletir. `will-change` mantém a
+   camada promovida para que arrastar o slider não force recomposição. */
+.mask-layer {
+  z-index: 2;
+  opacity: var(--mask-opacity, 1);
+  will-change: opacity;
+}
+
+/* Caixas por cima da máscara, redesenhadas a cada frame. */
+.box-layer {
+  z-index: 3;
+}
+
+/* Esconder uma camada é display:none e não opacity:0 — assim o compositor
+   deixa de ter o que compor em vez de compor algo invisível. */
+.layer-hidden {
+  display: none;
+}
+
 .camera-placeholder {
   display: flex;
   align-items: center;

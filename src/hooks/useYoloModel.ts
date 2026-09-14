@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { YOLO } from '@ultralytics/yolo';
-
-// O modelo vive em public/models, então é servido a partir da raiz.
-const MODEL_URL = '/models/yolo-seg.tflite';
+import { modelUrl } from '../lib/debugFlags';
 
 /**
  * Backends aceitos pela lib. 'auto' escolhe WebGPU quando existe adapter, o que
@@ -26,8 +24,18 @@ export const useYoloModel = (deviceOverride: ModelDevice = 'auto') => {
     const initModel = async () => {
       try {
         // 'auto' usa WebGPU quando o browser tem adapter e cai para CPU/wasm
-        // (caso do Safari). Os .wasm do LiteRT vêm do CDN padrão.
-        loaded = await YOLO.load(MODEL_URL, { device: deviceOverride });
+        // (caso do Safari).
+        //
+        // Os .wasm do LiteRT vêm de /litert/, copiados de node_modules por
+        // `npm run vendor`, em vez do CDN padrão (jsDelivr). Isso nasceu como
+        // pré-requisito do COOP/COEP — que acabou revertido, ver
+        // docs/PERFORMANCE.md § E1 — mas ficou por mérito próprio: tira um
+        // terceiro do caminho crítico do load, fixa a versão junto com o
+        // package.json e é o que permite cachear os binários offline.
+        loaded = await YOLO.load(modelUrl, {
+          device: deviceOverride,
+          litertWasmUrl: new URL('/litert/', location.origin).href
+        });
 
         if (isMounted) {
           setModel(loaded);

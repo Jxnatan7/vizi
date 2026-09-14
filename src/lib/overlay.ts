@@ -1,13 +1,16 @@
-import type { TrackedBox } from './tracker';
+import { projectBox, type TrackedBox } from './tracker';
 
-/** O que a interface escolheu exibir por cima do vídeo. */
+/**
+ * O que a interface escolheu exibir por cima do vídeo.
+ *
+ * Nenhum destes campos chega mais às funções de desenho: a visibilidade das
+ * camadas e a opacidade da máscara são resolvidas em CSS. O tipo continua aqui
+ * porque é o contrato entre os controles e o componente de detecção.
+ */
 export interface OverlayOptions {
   showBoxes: boolean;
   showMasks: boolean;
-  /**
-   * Multiplica o alfa que o engine já embutiu na máscara, então 1 é o teto:
-   * dá para apagar a máscara, não para deixá-la mais opaca que o padrão.
-   */
+  /** 0 a 1, aplicado como `opacity` na camada da máscara. */
   maskOpacity: number;
 }
 
@@ -17,62 +20,73 @@ const LABEL_FONT = '16px Arial';
 const LABEL_HEIGHT = 24;
 
 /**
- * Compõe máscara e caixas no canvas visível, na ordem em que precisam se
- * sobrepor: a máscara é o fundo, as caixas ficam por cima.
+ * Escreve a máscara na sua própria camada.
  *
- * A máscara passa por um canvas auxiliar antes de entrar no principal porque
- * putImageData sobrescreve pixels e ignora globalAlpha — desenhá-la direto
- * apagaria as caixas e deixaria o controle de opacidade sem efeito.
+ * Antes isto passava por um canvas auxiliar porque `putImageData` sobrescreve
+ * pixels e ignora `globalAlpha`, então desenhar direto apagaria as caixas e
+ * deixaria o controle de opacidade sem efeito. Com máscara e caixas em canvas
+ * separados nada disso vale: `putImageData` direto é o caminho mais curto, e a
+ * opacidade virou uma propriedade CSS da camada (trabalho de compositor, sem
+ * repintura).
+ *
+ * O `ImageData` é reaproveitado entre chamadas: `masks` chega como `Uint8Array`
+ * e o `ImageData` exige `Uint8ClampedArray`, então a cópia é inevitável — mas a
+ * alocação de ~1.2 MB por inferência não é.
  */
-export const drawOverlay = (
+export const createMaskPainter = () => {
+  let image: ImageData | null = null;
+
+  return (ctx: CanvasRenderingContext2D, masks: Uint8Array) => {
+    const { width, height } = ctx.canvas;
+
+    // Um modelo sem cabeça de segmentação devolve um array vazio, e o overlay
+    // só se alinha ao vídeo se vier exatamente nas dimensões dele.
+    if (masks.length !== width * height * 4) {
+      ctx.clearRect(0, 0, width, height);
+      return;
+    }
+
+    if (!image || image.width !== width || image.height !== height) {
+      image = new ImageData(width, height);
+    }
+
+    image.data.set(masks);
+    ctx.putImageData(image, 0, 0);
+  };
+};
+
+/**
+ * Desenha as caixas na camada de cima, projetadas para o instante `now`.
+ *
+ * Chamado a cada rAF, e não a cada inferência: entre duas detecções a caixa
+ * continua se movendo pela velocidade estimada em vez de ficar congelada e
+ * saltar. É o que dá a impressão de overlay a 60 FPS sobre ~3 inferências por
+ * segundo.
+ */
+export const drawBoxes = (
   ctx: CanvasRenderingContext2D,
-  offscreen: HTMLCanvasElement,
   tracked: TrackedBox[],
-  masks: Uint8Array,
-  { showBoxes, showMasks, maskOpacity }: OverlayOptions
+  now: number
 ) => {
   const { width, height } = ctx.canvas;
-
-  // Limpa sempre: com os dois modos desmarcados o vídeo fica sem nada por cima.
   ctx.clearRect(0, 0, width, height);
 
-  // O engine devolve a máscara já composta e colorida, do tamanho do frame.
-  // Um modelo sem cabeça de segmentação devolve um array vazio, e o overlay só
-  // se alinha ao vídeo se vier exatamente nas dimensões dele.
-  if (showMasks && maskOpacity > 0 && masks.length === width * height * 4) {
-    if (offscreen.width !== width || offscreen.height !== height) {
-      offscreen.width = width;
-      offscreen.height = height;
-    }
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = BOX_COLOR;
+  ctx.font = LABEL_FONT;
 
-    const offscreenCtx = offscreen.getContext('2d');
-    if (offscreenCtx) {
-      // A cópia é o que ImageData exige (Uint8ClampedArray); é o mesmo caminho
-      // que o annotate da própria lib faz.
-      const image = new ImageData(new Uint8ClampedArray(masks), width, height);
-      offscreenCtx.putImageData(image, 0, 0);
+  for (const entry of tracked) {
+    const box = projectBox(entry, now);
 
-      ctx.globalAlpha = maskOpacity;
-      ctx.drawImage(offscreen, 0, 0);
-      ctx.globalAlpha = 1;
-    }
-  }
-
-  if (!showBoxes) return;
-
-  tracked.forEach(({ id, box }) => {
     // A lib devolve xyxy em pixels; o canvas desenha a partir de x/y + tamanho.
     const x = box.x1;
     const y = box.y1;
     const boxWidth = box.x2 - box.x1;
     const boxHeight = box.y2 - box.y1;
-    const label = `#${id} ${Math.round(box.conf * 100)}%`;
+    const label = `#${entry.id} ${Math.round(box.conf * 100)}%`;
 
-    ctx.strokeStyle = BOX_COLOR;
-    ctx.lineWidth = 4;
     ctx.strokeRect(x, y, boxWidth, boxHeight);
 
-    ctx.font = LABEL_FONT;
     const textWidth = ctx.measureText(label).width;
 
     ctx.fillStyle = BOX_COLOR;
@@ -80,5 +94,5 @@ export const drawOverlay = (
 
     ctx.fillStyle = LABEL_TEXT_COLOR;
     ctx.fillText(label, x + 5, y - 6);
-  });
+  }
 };

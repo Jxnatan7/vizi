@@ -1,0 +1,21 @@
+# Formato Netlify/Cloudflare Pages. Equivalentes: "headers" no vercel.json,
+# add_header no nginx, header {} no Caddy.
+#
+# COOP/COEP (cross-origin isolation) foram testados e REVERTIDOS: o WebKit do
+# iPhone não tem relaxed SIMD, que o LiteRT exige para o build wasm threaded, e
+# o @ultralytics/yolo transforma isso num erro de load em vez de fallback.
+# Detalhes em docs/PERFORMANCE.md § E1 e no comentário do vite.config.ts.
+
+# O .tflite carrega metadata (task, names, imgsz) de um ZIP anexado ao fim do
+# arquivo: qualquer recompressão ou truncamento quebra model.names.
+/models/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Binários wasm do LiteRT, copiados de node_modules por `npm run vendor`.
+/litert/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# O Service Worker nunca pode ser cacheado: é ele que controla o cache de todo o
+# resto, e uma versão velha presa no cache do browser não teria como se corrigir.
+/sw.js
+  Cache-Control: no-cache

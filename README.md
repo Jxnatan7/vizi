@@ -86,13 +86,21 @@ executa `.tflite` através do LiteRT.js.
   arquivo quebra `model.names` — o arquivo precisa ser servido byte a byte.
 - **Device:** `auto` (WebGPU quando disponível, senão CPU/wasm). O device que
   rodou de fato aparece na tela inicial.
-- **Import map (`index.html`):** o `@ultralytics/yolo` importa o `@litertjs/core`
-  por especificador indireto marcado com `@vite-ignore`, então o bundler não o
-  resolve — quem resolve é o import map. Sem ele o app quebra com
-  `Failed to resolve module specifier '@litertjs/core'`, tanto em dev quanto em
-  produção. A versão no import map precisa acompanhar a do `package.json`.
-- **WASM:** os binários do LiteRT vêm do CDN padrão (jsDelivr). Se um dia a
-  página ficar `cross-origin-isolated` (COOP/COEP), o CDN para de funcionar e é
-  preciso self-hostar `node_modules/@litertjs/core/wasm/` apontando
-  `litertWasmUrl` no `YOLO.load()`.
+- **Resolução do `@litertjs/core`:** o `@ultralytics/yolo` o importa por
+  especificador indireto marcado com `@vite-ignore`, então o bundler não o
+  resolveria. Havia um import map no `index.html` para isso; foi substituído pelo
+  plugin `vizi:resolve-litert-in-workers` (`vite.config.ts`), que reescreve
+  aquela linha para um import literal e deixa o Vite empacotar. O motivo da troca
+  é que **import maps não valem em Web Worker**, e mover a inferência para um
+  worker é o caminho de performance (`docs/PERFORMANCE.md` § E7). O plugin falha
+  o build se o trecho mudar numa atualização da lib.
+  Por causa disso o `@ultralytics/yolo` está em `optimizeDeps.exclude`: sem isso
+  o Vite serve em dev uma versão pré-empacotada onde o transform não roda.
+- **WASM:** os binários do LiteRT são self-hostados em `public/litert/`, copiados
+  de `node_modules` por `npm run vendor` (roda no `predev`/`prebuild`) e apontados
+  por `litertWasmUrl` no `YOLO.load()`. Não vêm mais do CDN: tira um terceiro do
+  caminho crítico do load e fixa a versão junto com o `package.json`.
+- **COOP/COEP:** não habilite sem ler `docs/PERFORMANCE.md` § Fase 1. Foi testado
+  e revertido — o WebKit do iPhone não tem relaxed SIMD, que o LiteRT exige para
+  o build wasm multi-thread, e o wrapper transforma isso em erro de load.
 - **Licença:** `@ultralytics/yolo` e o modelo exportado são AGPL-3.0.
