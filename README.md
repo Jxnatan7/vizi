@@ -34,7 +34,17 @@ npm run web:lint
 React Native + Expo, com módulo nativo para inferência: Core ML na ANE no iOS,
 LiteRT com delegate de GPU no Android.
 
-Ainda não foi criado. Ver [mobile/README.md](mobile/README.md).
+Ainda não implementado. O projeto está configurado para **Spec-Driven
+Development** com [GitHub Spec Kit](https://github.com/github/spec-kit): a
+constituição e os marcos estão escritos, e nada é implementado fora do ciclo
+`specify → clarify → plan → tasks → implement`.
+
+```bash
+cd mobile && claude      # as skills vivem em mobile/.claude/skills/
+```
+
+Ver [mobile/README.md](mobile/README.md) e
+[a constituição](mobile/.specify/memory/constitution.md).
 
 ## Por que não há workspaces
 

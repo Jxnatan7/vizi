@@ -1,0 +1,32 @@
+# Nativo gerado por Continuous Native Generation (`expo prebuild`).
+# Nunca versionar: a fonte da verdade são os config plugins em app.config.js.
+/ios/
+/android/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Dependências
+node_modules
+
+# Build iOS local
+*.ipa
+*.app
+*.dSYM.zip
+
+# Modelos compilados (gerados por tools/export.py a partir do .pt)
+models/*.mlpackage/
+models/*.mlmodelc/
+models/*.tflite
+
+# Configuração local do Claude Code — pode conter credenciais.
+# As skills do Spec Kit em .claude/skills/ SÃO versionadas.
+.claude/settings.local.json
+.claude/.credentials.json
+
+# Ambiente
+.env
+.env.local
