@@ -39,6 +39,12 @@ export interface Diagnostics {
    * nunca dispara. Comparar com `inferenceMs` é o que revela esse caso.
    */
   fastestInferenceMs: number;
+  /**
+   * Custo da estimativa de movimento global, por frame. Roda 60x/s contra 2x/s
+   * da inferência, então é o único número deste painel que precisa ser lido
+   * multiplicado por 60 para saber quanto custa por segundo.
+   */
+  flowMs: number;
   error: string | null;
 }
 
@@ -104,6 +110,10 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
           </div>
           <div><strong>post</strong> {diagnostics.postprocessMs.toFixed(0)}ms</div>
           <div><strong>draw</strong> {diagnostics.drawMs.toFixed(1)}ms</div>
+          <div>
+            <strong>fluxo</strong> {diagnostics.flowMs.toFixed(2)}ms/frame ·{' '}
+            {(diagnostics.flowMs * 60).toFixed(0)}ms/s
+          </div>
 
           {/* O que o `speed` do engine não vê: leitura de pixels para RGBA e
               cópia das caixas/máscara para fora do wasm. É o candidato a

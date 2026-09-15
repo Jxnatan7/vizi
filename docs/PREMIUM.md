@@ -31,7 +31,32 @@ própria cadência e deriva os limites dela.
 
 ---
 
-## 1. Compensação de movimento global — o item principal
+## 1. Compensação de movimento global — ✅ IMPLEMENTADO
+
+Ver abaixo o desenho original. O que foi construído:
+
+- `src/lib/motion.ts` virou `createMotionTracker`: além do MAD para o gating,
+  estima o deslocamento (dx, dy) da câmera entre frames por busca de SAD num
+  frame reduzido a 48x48, com refinamento sub-pixel por parábola.
+- O **loop de desenho** passou a amostrar a 60fps (antes era o de detecção, a
+  cada 60ms) e consome o deslocamento; o de detecção só lê o MAD e marca a
+  referência a cada inferência.
+- **Caixas:** o deslocamento é somado à projeção por velocidade.
+- **Máscara:** `transform: translate3d()` na camada, escrito pelo loop de
+  desenho. Compositor puro — a máscara desliza sem que um pixel seja repintado.
+
+**Validado com teste sintético** (deslocamentos conhecidos, incluindo
+fracionários): sinal correto, sub-pixel correto (1.5 → 1.50), custo de
+**0.39ms por estimativa** — 23ms/s a 60fps.
+
+O teste também pegou um modo de falha: com padrão periódico, um deslocamento de
+(-0.5, 1.5) era estimado como (4, -4) — errado em sinal e magnitude, com o
+mínimo caindo na borda da busca. **Mínimo na borda passou a ser rejeitado**: ou o
+movimento passou do alcance (±40px de imagem por frame, >2400px/s) ou a imagem é
+ambígua. Nesses frames o overlay fica para trás em vez de sair para o lado
+errado.
+
+### Desenho original
 
 **O problema:** a máscara é um bitmap estático entre inferências. Por 470ms ela
 não se mexe, e então salta. As caixas têm extrapolação por velocidade, mas

@@ -56,17 +56,25 @@ export const createMaskPainter = () => {
 };
 
 /**
- * Desenha as caixas na camada de cima, projetadas para o instante `now`.
+ * Desenha as caixas na camada de cima, projetadas para o instante `now` e
+ * deslocadas pelo movimento da câmera.
  *
  * Chamado a cada rAF, e não a cada inferência: entre duas detecções a caixa
- * continua se movendo pela velocidade estimada em vez de ficar congelada e
- * saltar. É o que dá a impressão de overlay a 60 FPS sobre ~3 inferências por
- * segundo.
+ * continua se movendo em vez de ficar congelada e saltar. É o que dá a
+ * impressão de overlay a 60 FPS sobre ~2 inferências por segundo.
  */
 export const drawBoxes = (
   ctx: CanvasRenderingContext2D,
   tracked: TrackedBox[],
-  now: number
+  now: number,
+  /**
+   * Deslocamento global da câmera desde a inferência, em pixels do frame.
+   * Somado por cima da projeção por velocidade: a velocidade responde pelo
+   * movimento *relativo* dos objetos, e isto pelo movimento da câmera, que é a
+   * maior parte do que acontece na tela ao varrer uma estante.
+   */
+  offsetX = 0,
+  offsetY = 0
 ) => {
   const { width, height } = ctx.canvas;
   ctx.clearRect(0, 0, width, height);
@@ -79,8 +87,8 @@ export const drawBoxes = (
     const box = projectBox(entry, now);
 
     // A lib devolve xyxy em pixels; o canvas desenha a partir de x/y + tamanho.
-    const x = box.x1;
-    const y = box.y1;
+    const x = box.x1 + offsetX;
+    const y = box.y1 + offsetY;
     const boxWidth = box.x2 - box.x1;
     const boxHeight = box.y2 - box.y1;
     const label = `#${entry.id} ${Math.round(box.conf * 100)}%`;

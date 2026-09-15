@@ -5,17 +5,11 @@ import { createTracker, type TrackedBox } from '../lib/tracker';
 import { createMaskPainter, drawBoxes, type OverlayOptions } from '../lib/overlay';
 import type { Diagnostics } from './DiagnosticsPanel';
 import { detectionIntervalMs, motionThreshold } from '../lib/debugFlags';
-import { createMotionSampler } from '../lib/motion';
+import { createMotionTracker } from '../lib/motion';
 
 // Quantos frames seguidos a contagem precisa se repetir antes de virar estado.
 // Sem isso o número pisca a cada tremida da câmera.
 const COUNT_STABILITY_FRAMES = 3;
-
-// De quanto em quanto tempo o detector de movimento reamostra enquanto a cena
-// está parada. Define a latência para voltar a inferir quando algo se move:
-// 60ms é imperceptível e mantém o custo do polling irrisório. Durante uma cena
-// em movimento isso não limita nada — a inferência já demora bem mais que isso.
-const MOTION_SAMPLE_INTERVAL_MS = 60;
 
 // Com a cena parada não há inferência, e sem isso o painel congelaria no último
 // valor. Reportar 4x/s mantém a leitura de movimento viva para calibrar o
@@ -85,6 +79,33 @@ export const DetectionView: React.FC<DetectionViewProps> = ({
   // Último resultado de inferência, lido pelo loop de desenho a cada frame.
   const lastFrameRef = useRef<{ tracked: TrackedBox[] } | null>(null);
 
+  // Movimento global da câmera. Compartilhado entre os dois loops: o de desenho
+  // amostra a 60fps e consome o deslocamento; o de detecção lê a diferença para
+  // o gating e marca a referência a cada inferência.
+  const motionRef = useRef<ReturnType<typeof createMotionTracker> | null>(null);
+  if (motionRef.current === null) {
+    motionRef.current = createMotionTracker();
+  }
+
+  // Quantos pixels de CSS vale um pixel do canvas. O deslocamento da máscara é
+  // aplicado como transform no elemento, que vive em pixels de CSS, enquanto o
+  // movimento é medido em pixels do frame. Guardado num ref e recalculado só no
+  // resize: ler getBoundingClientRect a cada frame forçaria layout 60x/s.
+  const maskScaleRef = useRef(1);
+
+  // O espelhamento da camada da máscara passa a ser escrito pelo loop de
+  // desenho junto com a translação — uma prop `style` do React brigaria com ele
+  // a cada frame. As caixas continuam com transform do React: elas são
+  // redesenhadas dentro do canvas e nada mexe no estilo delas.
+  const mirrorRef = useRef(1);
+  useEffect(() => {
+    mirrorRef.current = facingMode === 'user' ? -1 : 1;
+  }, [facingMode]);
+
+  // Custo da estimativa de movimento, escrito pelo loop de desenho e lido pelo
+  // de detecção na hora de reportar. Vai por ref porque acontece 60x/s.
+  const flowCostRef = useRef(0);
+
   // Os loops pulam o trabalho quando a camada correspondente está escondida.
   // Vivem em refs, e não nas dependências dos efeitos, porque marcar um
   // checkbox não pode recriar o loop — isso zeraria o tracker e reiniciaria a
@@ -112,6 +133,27 @@ export const DetectionView: React.FC<DetectionViewProps> = ({
     }
   }, [stream]);
 
+  // Mantém a conversão canvas -> CSS atualizada. `object-fit: cover` escala o
+  // conteúdo pelo maior dos dois fatores, então é esse que vale.
+  useEffect(() => {
+    const canvas = maskCanvasRef.current;
+    if (!canvas) return;
+
+    const measure = () => {
+      const rect = canvas.getBoundingClientRect();
+      if (!canvas.width || !canvas.height || !rect.width) return;
+
+      maskScaleRef.current = Math.max(rect.width / canvas.width, rect.height / canvas.height);
+    };
+
+    measure();
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(canvas);
+
+    return () => observer.disconnect();
+  }, []);
+
   // Loop de detecção. Vive inteiro dentro do efeito: o rAF só roda depois da
   // montagem, e todo o estado do loop é local, morrendo junto com o cleanup.
   useEffect(() => {
@@ -126,10 +168,9 @@ export const DetectionView: React.FC<DetectionViewProps> = ({
     let lastInferenceStartedAt = 0;
     let emaIntervalMs = 0;
 
-    // Gating de movimento: enquanto a cena não muda, não se infere.
-    const motion = createMotionSampler();
-    let lastMotionSampleAt = 0;
-    let lastMotionValue = Infinity;
+    // Gating de movimento: enquanto a cena não muda, não se infere. Quem
+    // amostra é o loop de desenho, a 60fps; aqui só se lê o resultado.
+    const motion = motionRef.current!;
     let lastGatedReportAt = 0;
 
     // Guarda térmica: melhor caso observado (proxy do aparelho frio) contra a
@@ -195,15 +236,10 @@ export const DetectionView: React.FC<DetectionViewProps> = ({
         return;
       }
 
-      // Gating de movimento. A leitura é reaproveitada por
-      // MOTION_SAMPLE_INTERVAL_MS: parado, isso vira o único trabalho do loop;
-      // em movimento, a inferência já é mais lenta que o intervalo e cada
-      // inferência tem sua própria amostra fresca.
+      // Gating de movimento, sobre a leitura que o loop de desenho mantém
+      // atualizada a cada frame.
       const nowBeforeMotion = performance.now();
-      if (nowBeforeMotion - lastMotionSampleAt >= MOTION_SAMPLE_INTERVAL_MS) {
-        lastMotionValue = motion.sample(video);
-        lastMotionSampleAt = nowBeforeMotion;
-      }
+      const lastMotionValue = motion.mad;
 
       if (lastMotionValue < motionThreshold) {
         // Cena parada: a máscara na tela continua válida e as caixas seguem
@@ -225,6 +261,7 @@ export const DetectionView: React.FC<DetectionViewProps> = ({
             gated: true,
             thermalIdleMs: thermalIdleMs(),
             fastestInferenceMs,
+            flowMs: flowCostRef.current,
             error: null
           });
         }
@@ -320,6 +357,7 @@ export const DetectionView: React.FC<DetectionViewProps> = ({
           gated: false,
           thermalIdleMs: thermalIdleMs(),
           fastestInferenceMs,
+          flowMs: flowCostRef.current,
           error: null
         });
       } catch (err) {
@@ -342,6 +380,7 @@ export const DetectionView: React.FC<DetectionViewProps> = ({
           gated: false,
           thermalIdleMs: thermalIdleMs(),
           fastestInferenceMs,
+          flowMs: flowCostRef.current,
           error: String(err)
         });
       } finally {
@@ -367,18 +406,57 @@ export const DetectionView: React.FC<DetectionViewProps> = ({
   useEffect(() => {
     let isActive = true;
     let frameId = 0;
+    let flowMs = 0;
+
+    // O custo da estimativa interessa: ela roda 60x/s, enquanto a inferência
+    // roda 2x/s. Publicar num ref deixa o painel lê-lo sem re-render por frame.
+    const publishFlow = () => {
+      flowCostRef.current = flowMs;
+    };
 
     const drawFrame = () => {
       if (!isActive) return;
 
-      const canvas = boxCanvasRef.current;
+      const video = videoRef.current;
+      const boxCanvas = boxCanvasRef.current;
+      const maskCanvas = maskCanvasRef.current;
+      const motion = motionRef.current!;
       const last = lastFrameRef.current;
 
-      if (canvas && showBoxesRef.current) {
-        const ctx = canvas.getContext('2d');
-        if (ctx) drawBoxes(ctx, last?.tracked ?? [], performance.now());
+      if (video && video.readyState >= 2) {
+        // Estimativa de movimento global da câmera. Roda a cada frame porque é
+        // isso que o overlay precisa para acompanhar o vídeo entre inferências:
+        // amostrar mais devagar reintroduziria o atraso que ela existe para
+        // eliminar.
+        const sampleStartedAt = performance.now();
+        motion.sample(video);
+        flowMs = performance.now() - sampleStartedAt;
       }
 
+      const now = performance.now();
+      const offsetX = motion.offsetX;
+      const offsetY = motion.offsetY;
+
+      if (boxCanvas && showBoxesRef.current) {
+        const ctx = boxCanvas.getContext('2d');
+        if (ctx) drawBoxes(ctx, last?.tracked ?? [], now, offsetX, offsetY);
+      }
+
+      // A máscara não é redesenhada: ela desliza. Um transform na camada é
+      // trabalho de compositor, sem repintura e sem tocar nos ~1.2 MB de
+      // pixels — é o que torna viável mover a máscara a 60fps.
+      if (maskCanvas) {
+        const scale = maskScaleRef.current;
+        const mirror = mirrorRef.current;
+
+        // `scaleX` vem primeiro na string para ser aplicado por último: assim a
+        // translação acontece no espaço do canvas (não espelhado), que é onde o
+        // movimento foi medido.
+        maskCanvas.style.transform =
+          `scaleX(${mirror}) translate3d(${offsetX * scale}px, ${offsetY * scale}px, 0)`;
+      }
+
+      publishFlow();
       frameId = requestAnimationFrame(drawFrame);
     };
 
@@ -407,7 +485,7 @@ export const DetectionView: React.FC<DetectionViewProps> = ({
       <canvas
         ref={maskCanvasRef}
         className={`canvas mask-layer${showMasks ? '' : ' layer-hidden'}`}
-        style={{ ...mirrorStyle, '--mask-opacity': maskOpacity } as React.CSSProperties}
+        style={{ '--mask-opacity': maskOpacity } as React.CSSProperties}
       />
       <canvas
         ref={boxCanvasRef}
