@@ -95,10 +95,13 @@ Reanimated, e um Expo Module local para inferência.
 **Inferência.** Core ML com `computeUnits = .all` no iOS; LiteRT com delegate de
 GPU no Android. Interface TypeScript idêntica nas duas plataformas.
 
-**Modelo.** Exportado por `tools/export.py` a partir de um único `.pt`. Entrada
-retangular casando com o sensor, fp16 como padrão, **NMS fora do grafo** — NMS
-embutido empurra operações para a CPU e arrasta parte da rede junto. Shapes e
-classes vêm de `models/manifest.json`; nada de shape hardcoded em TypeScript.
+**Modelo.** Exportado no Colab a partir de um único `.pt`. **A geometria de
+export acompanha a do treino** — hoje 640×640, porque é o formato do dataset.
+Entrada retangular casando com o sensor economizaria 25%, mas só é legítima
+depois de um retreino nessa proporção: mudar a proporção no export degrada em
+silêncio. fp16 como padrão, e **NMS fora do grafo** — NMS embutido empurra
+operações para a CPU e arrasta parte da rede junto. Shapes e classes vêm dos
+metadados do próprio modelo; nada de shape hardcoded em TypeScript.
 
 **Build.** Continuous Native Generation: `ios/` e `android/` não são
 versionados. Toda configuração nativa vive em config plugins no
@@ -135,9 +138,20 @@ dias. Nada de valor é construído antes de eles passarem.
 porque o repositório git é compartilhado com `web/` e o número sozinho não
 diria de qual projeto a branch é.
 
-**Ciclo:** `/speckit-specify` → `/speckit-clarify` → `/speckit-plan` →
-`/speckit-tasks` → `/speckit-implement`. O `/speckit-clarify` é obrigatório em
-qualquer spec que toque o caminho quente.
+**Ciclo:** perguntar → `/speckit-specify` → `/speckit-plan` → `/speckit-tasks`
+→ `/speckit-implement`.
+
+**As dúvidas são resolvidas antes de especificar, não depois.** Toda pergunta
+cuja resposta mudaria o escopo, os critérios de aceite ou os requisitos é feita
+ao autor do projeto **antes** de a spec ser escrita. Uma spec entregue com
+marcador `[NEEDS CLARIFICATION]` é uma spec que não fez o trabalho de perguntar.
+
+`/speckit-clarify` fica disponível como conserto — para quando uma ambiguidade
+só aparecer depois — e não como etapa planejada do fluxo.
+
+Isto não proíbe adiar decisão: uma escolha que depende de um número que ainda
+não existe deve ser registrada como **decisão adiada** na própria spec, com o
+que a destravará. Adiar conscientemente é diferente de não ter perguntado.
 
 ## Governança
 
@@ -152,4 +166,13 @@ explicitamente — não deixado a apodrecer enquanto o código o ignora.
 Princípios IV e V admitem exceção pontual, desde que a exceção seja registrada
 na spec que a introduz, com prazo ou condição de remoção.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-15 | **Last Amended**: 2026-09-15
+**Version**: 1.1.0 | **Ratified**: 2026-09-15 | **Last Amended**: 2026-09-15
+
+### Histórico de emendas
+
+- **1.1.0** (2026-09-15) — O fluxo passa a resolver dúvidas *antes* de
+  `/speckit-specify`, em vez de depender de `/speckit-clarify` como etapa. A
+  versão 1.0.0 tornava `/speckit-clarify` obrigatório no caminho quente, o que
+  institucionalizava entregar spec ambígua e corrigir depois. Acrescenta o
+  conceito de decisão adiada, para separar "não perguntei" de "depende de um
+  número que ainda não existe".

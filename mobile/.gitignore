@@ -17,10 +17,11 @@ node_modules
 *.app
 *.dSYM.zip
 
-# Modelos compilados (gerados por tools/export.py a partir do .pt)
-models/*.mlpackage/
+# Modelos SÃO versionados: o CI compila o app a partir do repositório e o
+# modelo precisa entrar no bundle. Exportados no Colab a partir do .pt e
+# commitados. Ver specs/001-coreml-proof/quickstart.md.
+# Apenas artefatos intermediários de compilação do Core ML ficam de fora:
 models/*.mlmodelc/
-models/*.tflite
 
 # Configuração local do Claude Code — pode conter credenciais.
 # As skills do Spec Kit em .claude/skills/ SÃO versionadas.
