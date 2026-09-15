@@ -1,11 +1,13 @@
 {
   "name": "vizi",
   "private": true,
-  "description": "Detecção e segmentação de objetos em tempo real com YOLO — protótipo web e app mobile",
+  "description": "Detec\u00e7\u00e3o e segmenta\u00e7\u00e3o de objetos em tempo real com YOLO \u2014 prot\u00f3tipo web e app mobile",
   "scripts": {
     "web": "npm --prefix web run dev",
     "web:build": "npm --prefix web run build",
     "web:preview": "npm --prefix web run preview",
-    "web:lint": "npm --prefix web run lint"
+    "web:lint": "npm --prefix web run lint",
+    "mobile": "npm --prefix mobile run start",
+    "mobile:prebuild": "npm --prefix mobile run prebuild"
   }
 }

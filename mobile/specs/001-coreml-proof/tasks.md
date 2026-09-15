@@ -29,11 +29,11 @@ Caminhos relativos a `mobile/`, a raiz deste projeto no monorepo.
 
 **Purpose**: colocar o projeto Expo de pé sem destruir o que já existe.
 
-- [ ] T001 Criar projeto Expo em `mobile/`, preservando `.specify/`, `.claude/`, `README.md` e `.gitignore` já presentes
-- [ ] T002 Configurar `mobile/app.config.js` com identificador de pacote, nome e o plugin do dev client
-- [ ] T003 Instalar `expo-dev-client` e registrar em `mobile/package.json`
-- [ ] T004 [P] Criar `mobile/.github/workflows/ios.yml` com o esqueleto do job macOS (checkout, node, prebuild)
-- [ ] T005 [P] Adicionar atalhos do mobile ao `package.json` da raiz do monorepo
+- [x] T001 Criar projeto Expo em `mobile/`, preservando `.specify/`, `.claude/`, `README.md` e `.gitignore` já presentes — SDK 57.0.23, RN 0.86.3, React 19.2.3
+- [x] T002 Configurar `mobile/app.config.js` com identificador de pacote, nome e o plugin do dev client — `com.jxnatan7.vizi`, sem `app.json` para não haver duas fontes
+- [x] T003 Instalar `expo-dev-client` e registrar em `mobile/package.json` — `~57.0.19`
+- [x] T004 [P] Criar `.github/workflows/ios.yml` **na raiz do repositório** — o Actions só lê workflows da raiz; dentro de `mobile/` nunca rodaria
+- [x] T005 [P] Adicionar atalhos do mobile ao `package.json` da raiz do monorepo — `npm run mobile`, `npm run mobile:prebuild`
 
 **Checkpoint**: `npx expo start` roda e o projeto compila localmente até onde Linux permite.
 
@@ -46,10 +46,10 @@ Caminhos relativos a `mobile/`, a raiz deste projeto no monorepo.
 **⚠️ CRITICAL**: sem isto, a US1 passaria com um app 100% JavaScript e a US2
 descobriria que o build quebra ao adicionar código nativo.
 
-- [ ] T006 Criar o Expo Module local `mobile/modules/vizi-vision/` com `expo-module.config.json`
-- [ ] T007 Criar `mobile/modules/vizi-vision/ios/ViziVisionModule.swift` expondo uma função trivial, só para exercitar o autolinking
-- [ ] T008 Criar `mobile/modules/vizi-vision/src/index.ts` com a API tipada conforme `contracts/vizi-vision.md`, ainda sem implementação
-- [ ] T009 Chamar a função trivial em `mobile/App.tsx` e exibir o retorno na tela
+- [x] T006 Criar o Expo Module local `mobile/modules/vizi-vision/` com `expo-module.config.json` — gerado por `create-expo-module --local`, plataforma apple
+- [x] T007 Criar `mobile/modules/vizi-vision/ios/ViziVisionModule.swift` expondo uma função trivial, só para exercitar o autolinking — `probe()` devolve sistema, núcleos, memória e modo de baixo consumo
+- [x] T008 Criar a API tipada em `mobile/modules/vizi-vision/src/` conforme `contracts/vizi-vision.md` — tipos completos; no módulo nativo, só o que existe em Swift
+- [x] T009 Chamar a função trivial em `mobile/App.tsx` e exibir o retorno na tela — com estado de erro legível, que é o sinal de Expo Go
 
 **Checkpoint**: existe código Swift próprio no binário. Agora a US1 valida a cadeia de verdade.
 
@@ -63,7 +63,7 @@ descobriria que o build quebra ao adicionar código nativo.
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Completar `mobile/.github/workflows/ios.yml`: `pod install`, `xcodebuild` sem assinatura, empacotar em `Payload/`, publicar o `.ipa` como artefato — resolve **R4**
+- [ ] T010 [US1] Validar `.github/workflows/ios.yml` numa execução real: `pod install`, `xcodebuild` sem assinatura, empacotar em `Payload/`, publicar o `.ipa` como artefato — resolve **R4**
 - [ ] T011 [US1] Instalar e validar a cadeia de ferramentas local de assinatura e instalação em Linux — resolve **R1**, o maior risco do marco
 - [ ] T012 [US1] Obter certificado e perfil de provisionamento com a conta Apple gratuita
 - [ ] T013 [US1] Assinar o artefato e instalar no iPhone por USB
