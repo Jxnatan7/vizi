@@ -1,106 +1,58 @@
-# React + TypeScript + Vite
+# vizi
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Detecção e segmentação de objetos em tempo real com YOLO, on-device.
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+O repositório guarda dois projetos independentes que compartilham o assunto, os
+modelos e o aprendizado — mas nenhuma linha de código.
 
 ```
-
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+web/      protótipo em React + Vite  ·  encerrado, mantido como referência
+mobile/   app React Native + Expo    ·  em construção
 ```
 
-## Modelo de detecção
+## web/ — o protótipo
 
-O app roda um YOLOv8 próprio (`public/models/yolo.tflite`) no browser via
-[`@ultralytics/yolo`](https://www.npmjs.com/package/@ultralytics/yolo), que
-executa `.tflite` através do LiteRT.js.
+Roda YOLO no navegador via `@ultralytics/yolo` sobre LiteRT. **Está encerrado**,
+e é mantido porque a investigação de performance registrada em
+[web/docs/PERFORMANCE.md](web/docs/PERFORMANCE.md) e
+[web/docs/PREMIUM.md](web/docs/PREMIUM.md) é o que fundamenta as decisões do app
+mobile.
 
-- **Classe única:** `Bookshelf-counter` (nome de exibição em `DetectionView.tsx`).
-- **Metadata embutido:** `task`, `names` e `imgsz` são lidos de um ZIP anexado ao
-  fim do próprio `.tflite`. Qualquer proxy/CDN que recomprima ou trunque o
-  arquivo quebra `model.names` — o arquivo precisa ser servido byte a byte.
-- **Device:** `auto` (WebGPU quando disponível, senão CPU/wasm). O device que
-  rodou de fato aparece na tela inicial.
-- **Resolução do `@litertjs/core`:** o `@ultralytics/yolo` o importa por
-  especificador indireto marcado com `@vite-ignore`, então o bundler não o
-  resolveria. Havia um import map no `index.html` para isso; foi substituído pelo
-  plugin `vizi:resolve-litert-in-workers` (`vite.config.ts`), que reescreve
-  aquela linha para um import literal e deixa o Vite empacotar. O motivo da troca
-  é que **import maps não valem em Web Worker**, e mover a inferência para um
-  worker é o caminho de performance (`docs/PERFORMANCE.md` § E7). O plugin falha
-  o build se o trecho mudar numa atualização da lib.
-  Por causa disso o `@ultralytics/yolo` está em `optimizeDeps.exclude`: sem isso
-  o Vite serve em dev uma versão pré-empacotada onde o transform não roda.
-- **WASM:** os binários do LiteRT são self-hostados em `public/litert/`, copiados
-  de `node_modules` por `npm run vendor` (roda no `predev`/`prebuild`) e apontados
-  por `litertWasmUrl` no `YOLO.load()`. Não vêm mais do CDN: tira um terceiro do
-  caminho crítico do load e fixa a versão junto com o `package.json`.
-- **COOP/COEP:** não habilite sem ler `docs/PERFORMANCE.md` § Fase 1. Foi testado
-  e revertido — o WebKit do iPhone não tem relaxed SIMD, que o LiteRT exige para
-  o build wasm multi-thread, e o wrapper transforma isso em erro de load.
-- **Licença:** `@ultralytics/yolo` e o modelo exportado são AGPL-3.0.
+O resumo do que ele provou: o caminho wasm/CPU do Safari no iOS é single-thread
+(sem relaxed SIMD em ARM, threads são inalcançáveis), a inferência custa ~280 ms
+e nenhuma API web chega ao Neural Engine. O teto é estrutural, não de
+implementação.
+
+```bash
+npm run web          # dev server
+npm run web:build    # build de produção
+npm run web:lint
+```
+
+## mobile/ — o app
+
+React Native + Expo, com módulo nativo para inferência: Core ML na ANE no iOS,
+LiteRT com delegate de GPU no Android.
+
+Ainda não foi criado. Ver [mobile/README.md](mobile/README.md).
+
+## Por que não há workspaces
+
+Cada projeto instala as próprias dependências, com o próprio lockfile. Não há
+workspaces de npm e isso é deliberado:
+
+- os dois projetos **não compartilham nenhuma dependência** — um é Vite, o outro
+  é Metro;
+- o hoisting de workspaces é a causa mais comum de quebra em projetos React
+  Native, e resolver isso custaria configuração de Metro sem entregar nada.
+
+Monorepo aqui significa um repositório com dois projetos, não um grafo de
+pacotes. Se algum dia surgir código realmente compartilhado, workspaces entram
+junto com ele.
+
+```bash
+npm install --prefix web      # instala as dependências do protótipo web
+```
+
+Os scripts na raiz são apenas atalhos com `--prefix`; `npm install` na raiz não
+instala nada.
