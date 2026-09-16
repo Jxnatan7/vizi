@@ -2,7 +2,7 @@ import { NativeModule, requireNativeModule } from 'expo';
 
 import type {
   BenchmarkOptions, ModelInfo, NativeProbe, RawMeasurement,
-  Session, SessionInfo, SessionOptions, TelemetrySample, TransformMode,
+  OverlayStyle, Session, SessionInfo, SessionOptions, TelemetrySample, TransformMode,
 } from './ViziVision.types';
 
 type Events = {
@@ -22,6 +22,7 @@ declare class ViziVisionModule extends NativeModule<Events> {
   startSession(options: SessionOptions): Promise<SessionInfo>;
   stopSession(): Promise<Session>;
   setTransform(transform: TransformMode): Promise<void>;
+  setOverlayStyle(style: OverlayStyle): Promise<void>;
 }
 
 export default requireNativeModule<ViziVisionModule>('ViziVision');

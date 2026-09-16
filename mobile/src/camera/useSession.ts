@@ -7,8 +7,10 @@ import {
   type SessionOptions,
   type Session,
   type TelemetrySample,
+  type OverlayStyle,
   type TransformMode,
 } from '../../modules/vizi-vision';
+import { DEFAULT_OVERLAY } from '../overlay/style';
 
 /** Política da sessão. Vive em TypeScript — princípio IV. */
 export const DEFAULT_SESSION: SessionOptions = {
@@ -34,6 +36,13 @@ export function useSession() {
   }, []);
 
   const [transform, setTransformState] = useState<TransformMode>(DEFAULT_SESSION.transform);
+  const [overlay, setOverlayState] = useState<OverlayStyle>(DEFAULT_OVERLAY);
+
+  const setOverlay = useCallback(async (next: Partial<OverlayStyle>) => {
+    const merged = { ...DEFAULT_OVERLAY, ...overlay, ...next };
+    setOverlayState(merged);
+    await ViziVision.setOverlayStyle(merged);
+  }, [overlay]);
 
   const setTransform = useCallback(async (next: TransformMode) => {
     setTransformState(next);
@@ -51,11 +60,12 @@ export function useSession() {
       }
       setSession(null);
       setInfo(await ViziVision.startSession({ ...DEFAULT_SESSION, transform }));
+      await ViziVision.setOverlayStyle(overlay);
       running.current = true;
     } catch (e) {
       setError(String(e));
     }
-  }, [transform]);
+  }, [transform, overlay]);
 
   const stop = useCallback(async () => {
     if (!running.current) return;
@@ -83,7 +93,7 @@ export function useSession() {
   useEffect(() => () => void stop(), [stop]);
 
   return {
-    info, sample, session, error, transform,
-    start, stop, setTransform, isRunning: running.current,
+    info, sample, session, error, transform, overlay,
+    start, stop, setTransform, setOverlay, isRunning: running.current,
   };
 }

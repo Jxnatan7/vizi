@@ -19,9 +19,9 @@ Caminhos relativos a `mobile/`.
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Criar `src/overlay/style.ts` com o `OverlayStyle` padrão — espessura, opacidade, paleta e `minConfidence` (FR-010)
-- [ ] T002 [P] Acrescentar `OverlayStyle` aos tipos do módulo e `setOverlayStyle` à superfície nativa
-- [ ] T003 Controles de ligar e desligar caixas e máscaras na `CameraScreen` (FR-003)
+- [x] T001 [P] Criar `src/overlay/style.ts` com o `OverlayStyle` padrão — espessura, opacidade, paleta e `minConfidence` (FR-010) — `src/overlay/style.ts`
+- [x] T002 [P] Acrescentar `OverlayStyle` aos tipos do módulo e `setOverlayStyle` à superfície nativa — `OverlayStyle` tipado e `setOverlayStyle` no módulo
+- [x] T003 Controles de ligar e desligar caixas e máscaras na `CameraScreen` (FR-003) — alternância de caixas e máscaras na tela
 
 ---
 
@@ -31,10 +31,10 @@ Caminhos relativos a `mobile/`.
 
 **⚠️ CRITICAL**: é aqui que o princípio I pode cair. Se o overlay puxar o resultado da fila da câmera, inferência e desenho passam a se bloquear.
 
-- [ ] T004 `Decode.swift` passa a extrair os **32 coeficientes de máscara** de cada instância sobrevivente — hoje são lidos e descartados
-- [ ] T005 `InferenceEngine` passa a reter a saída de protótipos `[1,32,160,160]`, resolvida por forma como as demais
-- [ ] T006 Publicar o último resultado em `SessionCoordinator`, com leitura sem bloqueio — resolve **R12**
-- [ ] T007 Criar `OverlayRenderer.swift` e empilhar as camadas na `PreviewView`, ainda sem desenhar nada
+- [x] T004 `Decode.swift` passa a extrair os **32 coeficientes de máscara** de cada instância sobrevivente — hoje são lidos e descartados — extraídos **depois** do NMS, só para os sobreviventes
+- [x] T005 `InferenceEngine` passa a reter a saída de protótipos `[1,32,160,160]`, resolvida por forma como as demais — `RunResult.protos`, resolvida por forma
+- [x] T006 Publicar o último resultado em `SessionCoordinator`, com leitura sem bloqueio — resolve **R12** — `ResultStore`: a inferência publica, o desenho lê — **R12 resolvida**
+- [x] T007 Criar `OverlayRenderer.swift` e empilhar as camadas na `PreviewView`, ainda sem desenhar nada — `OverlayRenderer` com `CADisplayLink`, camadas empilhadas na `PreviewView`
 
 **Checkpoint**: as camadas existem e a inferência continua a 60 fps. Nada mudou na tela.
 
@@ -46,10 +46,10 @@ Caminhos relativos a `mobile/`.
 
 **Independent Test**: apontar para a estante; as caixas caem sobre os livros.
 
-- [ ] T008 [US1] Desenhar as caixas numa `CAShapeLayer`, caminho reconstruído por frame
-- [ ] T009 [US1] Aplicar `boxWidth` em pixels de imagem, não de tela — a view muda de tamanho, o espaço do modelo não
-- [ ] T010 [US1] Cor determinística pela posição quantizada do centro — resolve **R11**; cor por índice piscaria a cada frame
-- [ ] T011 [US1] Respeitar `minConfidence` do estilo, separado do limiar de detecção
+- [x] T008 [US1] Desenhar as caixas numa `CAShapeLayer`, caminho reconstruído por frame — pool de `CAShapeLayer`, uma por caixa
+- [x] T009 [US1] Aplicar `boxWidth` em pixels de imagem, não de tela — a view muda de tamanho, o espaço do modelo não — espessura em pixels de imagem, escalada pela view
+- [x] T010 [US1] Cor determinística pela posição quantizada do centro — resolve **R11**; cor por índice piscaria a cada frame — cor por posição quantizada — **R11 resolvida**
+- [x] T011 [US1] Respeitar `minConfidence` do estilo, separado do limiar de detecção — `minConfidence` separado do limiar de detecção
 - [ ] T012 [US1] 🚦 Verificar **SC-004**: as caixas caem sobre os objetos, sem deslocamento sistemático
 - [ ] T013 [US1] 🚦 **Olhar se o overlay parece fluido** — a observação que decide o futuro do marco 4. Aparelho na mão, em movimento
 

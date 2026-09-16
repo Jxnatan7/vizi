@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import Foundation
+import UIKit
 
 /// Política da medição. Os valores vêm do TypeScript — princípio IV.
 ///
@@ -15,6 +16,17 @@ struct BenchmarkOptions: Record {
 }
 
 /// Política da sessão de câmera. Também vem do TypeScript — princípio IV.
+/// Aparência do overlay. O nativo executa; o TypeScript decide (FR-010).
+struct OverlayStyleRecord: Record {
+  @Field var showBoxes: Bool = true
+  @Field var showMasks: Bool = true
+  @Field var boxWidth: Double = 3
+  @Field var maskOpacity: Double = 0.45
+  @Field var minConfidence: Double = 0.3
+  /// Cores em "#RRGGBB".
+  @Field var palette: [String] = []
+}
+
 struct SessionOptions: Record {
   @Field var sampleIntervalMs: Int = 500
   @Field var transform: String = "stretch"
@@ -119,6 +131,14 @@ public class ViziVisionModule: Module {
       self.coordinator.onSample = { [weak self] sample in
         self?.sendEvent("onTelemetry", sample)
       }
+      // O renderizador lê do store; a inferência publica nele. Nenhum dos dois
+      // espera pelo outro.
+      DispatchQueue.main.async {
+        guard let view = PreviewSink.shared.view else { return }
+        view.overlay.store = self.coordinator.results
+        view.overlay.imageSide = CGFloat(self.engine.inputWidth)
+        view.overlay.start()
+      }
       return try self.coordinator.start(
         sampleIntervalMs: options.sampleIntervalMs,
         mode: TransformMode(rawValue: options.transform) ?? .stretch,
@@ -130,10 +150,27 @@ public class ViziVisionModule: Module {
       self.coordinator.mode = TransformMode(rawValue: transform) ?? .stretch
     }
 
+    AsyncFunction("setOverlayStyle") { (record: OverlayStyleRecord) in
+      var style = OverlayStyle()
+      style.showBoxes = record.showBoxes
+      style.showMasks = record.showMasks
+      style.boxWidth = CGFloat(record.boxWidth)
+      style.maskOpacity = CGFloat(record.maskOpacity)
+      style.minConfidence = Float(record.minConfidence)
+      if !record.palette.isEmpty {
+        style.palette = record.palette.compactMap { UIColor(hex: $0)?.cgColor }
+      }
+      // Trocar estilo não pode custar um frame: aplica na camada existente.
+      DispatchQueue.main.async {
+        PreviewSink.shared.view?.overlay.style = style
+      }
+    }
+
     // Preview: mostra o buffer JÁ TRANSFORMADO, o mesmo que vai ao modelo.
     View(PreviewView.self) {}
 
     AsyncFunction("stopSession") { () -> [String: Any] in
+      DispatchQueue.main.async { PreviewSink.shared.view?.overlay.stop() }
       let summary = self.coordinator.stop()
       self.coordinator.onSample = nil
       return summary

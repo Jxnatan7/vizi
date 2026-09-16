@@ -14,6 +14,7 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
   private let gate = FrameGate()
   private let transform = FrameTransform()
   private let telemetry = Telemetry()
+  let results = ResultStore()
 
   /// Carregado pelo módulo antes de iniciar a sessão.
   weak var engine: InferenceEngine?
@@ -93,6 +94,7 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
     timer?.cancel()
     timer = nil
     camera.stop()
+    results.clear()
     camera.delegate = nil
     let snap = telemetry.snapshot()
     return [
@@ -212,6 +214,9 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
     // início do processamento esconderia o tempo que ele passou esperando.
     let now = CMClockGetTime(CMClockGetHostTimeClock())
     let e2e = (now - frame.presentationTime).seconds * 1000
+
+    // Publica e segue. Quem desenha lê quando quiser — o princípio I.
+    results.publish(instances: result.instances, protos: result.protos)
 
     statsLock.lock()
     transformMs.append(transformElapsed)

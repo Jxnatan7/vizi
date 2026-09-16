@@ -17,7 +17,7 @@ import { colors } from './theme';
 export default function CameraScreen() {
   const dark = useColorScheme() === 'dark';
   const c = dark ? colors.dark : colors.light;
-  const { info, sample, session, error, transform, start, stop, setTransform } = useSession();
+  const { info, sample, session, error, transform, overlay, start, stop, setTransform, setOverlay } = useSession();
   const [copied, setCopied] = useState(false);
   const verdicts = useMemo(() => (session ? evaluateGate(session) : []), [session]);
 
@@ -46,6 +46,24 @@ export default function CameraScreen() {
               Entrada do modelo · {transform}
             </Text>
           </>
+        )}
+
+        {info && (
+          <View style={styles.modes}>
+            {([['showBoxes', 'caixas'], ['showMasks', 'máscaras']] as const).map(([key, label]) => (
+              <Pressable
+                key={key}
+                onPress={() => setOverlay({ [key]: !overlay[key] })}
+                style={[styles.mode, {
+                  borderColor: overlay[key] ? c.ok : c.line,
+                  backgroundColor: c.bgAlt,
+                }]}>
+                <Text style={{ color: overlay[key] ? c.ok : c.muted, fontSize: 12, fontWeight: '600' }}>
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         )}
 
         <View style={styles.modes}>

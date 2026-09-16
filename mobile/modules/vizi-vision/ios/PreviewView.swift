@@ -14,21 +14,28 @@ final class PreviewView: ExpoView {
   private let displayLayer = AVSampleBufferDisplayLayer()
   private var formatDescription: CMVideoFormatDescription?
 
+  /// O overlay desenha no relógio do display, lendo o último resultado
+  /// publicado — nunca esperando um novo (princípio I).
+  let overlay = OverlayRenderer()
+
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     displayLayer.videoGravity = .resizeAspect
     layer.addSublayer(displayLayer)
+    overlay.attach(to: layer)
     backgroundColor = .black
     PreviewSink.shared.view = self
   }
 
   deinit {
+    overlay.stop()
     if PreviewSink.shared.view === self { PreviewSink.shared.view = nil }
   }
 
   override func layoutSubviews() {
     super.layoutSubviews()
     displayLayer.frame = bounds
+    overlay.layout(bounds)
   }
 
   /// Chamado da fila da câmera, não da thread de interface.

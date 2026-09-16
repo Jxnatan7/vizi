@@ -137,6 +137,9 @@ final class InferenceEngine {
     var decodeMs: Double
     var cycleMs: Double
     var instances: [Instance]
+    /// `[1, 32, 160, 160]`. Combinada com os coeficientes de cada instância,
+    /// produz a silhueta. **Nunca atravessa a fronteira.**
+    var protos: MLMultiArray?
   }
 
   /// Marco 1: sobre a imagem de referência embarcada.
@@ -164,10 +167,14 @@ final class InferenceEngine {
     let out = try model.prediction(from: provider)
     let modelMs = (CFAbsoluteTimeGetCurrent() - modelStart) * 1000
 
+    // Resolvidas por FORMA, não por nome: var_1011 e var_1049 mudam a cada
+    // export do modelo.
     var detections: MLMultiArray?
+    var protos: MLMultiArray?
     for name in out.featureNames {
       guard let arr = out.featureValue(for: name)?.multiArrayValue else { continue }
       if arr.shape.count == 3 { detections = arr }
+      if arr.shape.count == 4 { protos = arr }
     }
     guard let detections else { throw EngineError.badOutput("saída de detecção ausente") }
 
@@ -185,7 +192,8 @@ final class InferenceEngine {
       modelMs: modelMs,
       decodeMs: decodeMs,
       cycleMs: (CFAbsoluteTimeGetCurrent() - cycleStart) * 1000,
-      instances: instances)
+      instances: instances,
+      protos: protos)
   }
 
   static func thermalStateLabel() -> String {

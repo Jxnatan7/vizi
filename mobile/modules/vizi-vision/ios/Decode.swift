@@ -8,6 +8,16 @@ struct Instance {
   var y: Float
   var width: Float
   var height: Float
+
+  /// Índice da âncora que originou esta detecção. Serve para buscar os
+  /// coeficientes depois do NMS, em vez de copiar 32 floats para centenas de
+  /// candidatos que serão descartados.
+  var anchorIndex: Int = -1
+
+  /// Os 32 coeficientes que, combinados com os protótipos, produzem a
+  /// silhueta. **Preenchidos só para os sobreviventes**, e nunca enviados ao
+  /// JavaScript — princípio II.
+  var coefficients: [Float] = []
 }
 
 /// Saída crua do YOLO → instâncias. O que sai daqui é a única coisa que
@@ -65,11 +75,30 @@ enum Decode {
 
         kept.append(Instance(
           classIndex: best, score: bestScore,
-          x: x1, y: y1, width: x2 - x1, height: y2 - y1))
+          x: x1, y: y1, width: x2 - x1, height: y2 - y1,
+          anchorIndex: a))
       }
     }
 
-    return nms(kept, iouThreshold: iouThreshold)
+    var survivors = nms(kept, iouThreshold: iouThreshold)
+
+    // Só agora os coeficientes são copiados: dezenas de instâncias em vez das
+    // centenas que entraram no NMS.
+    detections.withUnsafeMutableBufferPointer(ofType: Float32.self) { buf, _ in
+      let p = buf.baseAddress!
+      let firstCoeffRow = 4 + classCount
+      for i in survivors.indices {
+        let a = survivors[i].anchorIndex
+        guard a >= 0 else { continue }
+        var coefficients = [Float](repeating: 0, count: maskCoeffCount)
+        for c in 0..<maskCoeffCount {
+          coefficients[c] = p[(firstCoeffRow + c) * anchors + a]
+        }
+        survivors[i].coefficients = coefficients
+      }
+    }
+
+    return survivors
   }
 
   private static func nms(_ boxes: [Instance], iouThreshold: Float) -> [Instance] {

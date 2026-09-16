@@ -157,3 +157,20 @@ export type Session = {
   /** true = amostras antigas foram descartadas pelo buffer circular. */
   truncated: boolean;
 };
+
+// ---------------------------------------------------------------------------
+// Marco 3 — overlay
+// ---------------------------------------------------------------------------
+
+/** O nativo desenha; isto decide como. Ver contracts/overlay-style.md. */
+export type OverlayStyle = {
+  showBoxes: boolean;
+  showMasks: boolean;
+  /** Pixels do espaço do modelo, não da tela. */
+  boxWidth: number;
+  maskOpacity: number;
+  /** O que *aparece*, separado do limiar que decide o que *existe*. */
+  minConfidence: number;
+  /** Cores "#RRGGBB". A atribuição por objeto é do nativo. */
+  palette: string[];
+};
