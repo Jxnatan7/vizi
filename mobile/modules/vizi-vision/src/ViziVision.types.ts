@@ -86,3 +86,40 @@ export type Measurement = {
   /** Série crua das primeiras execuções, para inspecionar o aquecimento. */
   warmupCurve: number[];
 };
+
+// ---------------------------------------------------------------------------
+// Marco 2 — sessão de câmera
+// ---------------------------------------------------------------------------
+
+export type SessionOptions = {
+  /** Cadência do evento de telemetria. Nunca menor que 100 ms. */
+  sampleIntervalMs: number;
+};
+
+export type SessionInfo = {
+  captureWidth: number;
+  captureHeight: number;
+  maxFrameRate: number;
+};
+
+/** Uma leitura periódica. Taxas são da janela, não acumuladas. */
+export type TelemetrySample = {
+  /** Milissegundos desde o início da sessão. */
+  t: number;
+  fpsCaptured: number;
+  fpsInferred: number;
+  /** 0 ou 1. Acima disso, o descarte falhou. */
+  queueDepth: number;
+  dropped: number;
+  thermalState: string;
+  /** 0 a 1, ou -1 quando indisponível. */
+  batteryLevel: number;
+  lowPowerMode: boolean;
+};
+
+export type SessionSummary = {
+  durationMs: number;
+  received: number;
+  processed: number;
+  dropped: number;
+};

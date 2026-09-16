@@ -20,6 +20,13 @@ export default {
       // por 7 dias — trocar este valor queima cota.
       bundleIdentifier: 'com.jxnatan7.vizi',
       supportsTablet: false,
+
+      infoPlist: {
+        // Sem esta chave o iOS encerra o app na primeira tentativa de acesso à
+        // câmera — sem diálogo, sem erro, só o app fechando.
+        NSCameraUsageDescription:
+          'O vizi usa a câmera para detectar e contar objetos em tempo real, no próprio aparelho.',
+      },
     },
 
     android: {

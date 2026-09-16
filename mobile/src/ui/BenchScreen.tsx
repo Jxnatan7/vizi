@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useColorScheme,
+  ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, View, useColorScheme,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
@@ -8,7 +8,8 @@ import { ViziVision, type ModelInfo, type NativeProbe, type Measurement } from '
 import { compareWithReference, type Comparison } from '../bench/compareReference';
 import { DEFAULT_OPTIONS, runBenchmark } from '../bench/runBenchmark';
 import { ms } from '../bench/stats';
-import { colors, type Palette } from './theme';
+import { Button, Card, Row } from './parts';
+import { colors } from './theme';
 
 export default function BenchScreen() {
   const dark = useColorScheme() === 'dark';
@@ -179,38 +180,6 @@ export default function BenchScreen() {
   );
 }
 
-function Card({ c, border, label, children }: { c: Palette; border: string; label: string; children: React.ReactNode }) {
-  return (
-    <View style={[styles.card, { borderColor: border, backgroundColor: c.bgAlt }]}>
-      <Text style={[styles.cardLabel, { color: border }]}>{label}</Text>
-      {children}
-    </View>
-  );
-}
-
-function Row({ c, label, value, strong }: { c: Palette; label: string; value: string; strong?: boolean }) {
-  return (
-    <View style={styles.row}>
-      <Text style={[styles.rowLabel, { color: c.muted }]}>{label}</Text>
-      <Text style={[styles.mono, { color: c.ink, fontSize: strong ? 17 : 13 }]}>{value}</Text>
-    </View>
-  );
-}
-
-function Button({ c, onPress, disabled, title }: { c: Palette; onPress: () => void; disabled: boolean; title: string }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [
-        styles.button,
-        { borderColor: c.line, backgroundColor: c.bgAlt, opacity: disabled ? 0.4 : pressed ? 0.7 : 1 },
-      ]}>
-      <Text style={[styles.buttonText, { color: c.ink }]}>{title}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   content: { padding: 24, gap: 14 },
@@ -218,12 +187,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 34, fontWeight: '700', letterSpacing: -0.5, marginTop: -8 },
   banner: { borderWidth: 1, borderLeftWidth: 3, borderRadius: 4, padding: 12 },
   bannerText: { fontSize: 12, lineHeight: 17 },
-  card: { borderWidth: 1, borderRadius: 4, padding: 16, gap: 10 },
-  cardLabel: { fontSize: 10, letterSpacing: 1.2, fontWeight: '700' },
-  row: { gap: 2 },
-  rowLabel: { fontSize: 11, letterSpacing: 0.6 },
   mono: { fontFamily: 'Menlo', fontSize: 13 },
   hint: { fontSize: 11, lineHeight: 16 },
-  button: { borderWidth: 1, borderRadius: 4, paddingVertical: 14, alignItems: 'center' },
-  buttonText: { fontSize: 15, fontWeight: '600' },
 });

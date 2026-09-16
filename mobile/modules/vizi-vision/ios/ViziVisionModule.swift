@@ -14,11 +14,21 @@ struct BenchmarkOptions: Record {
   @Field var iouThreshold: Double = 0.7
 }
 
+/// Política da sessão de câmera. Também vem do TypeScript — princípio IV.
+struct SessionOptions: Record {
+  @Field var sampleIntervalMs: Int = 500
+}
+
 public class ViziVisionModule: Module {
   private let engine = InferenceEngine()
+  private let coordinator = SessionCoordinator()
 
   public func definition() -> ModuleDefinition {
     Name("ViziVision")
+
+    // Emitido a ~2 Hz. Um evento por frame seriam 60 travessias por segundo e
+    // 60 re-renders — princípios II e III violados de uma vez.
+    Events("onTelemetry")
 
     Function("probe") { () -> [String: Any] in
       let info = ProcessInfo.processInfo
@@ -85,6 +95,35 @@ public class ViziVisionModule: Module {
 
     AsyncFunction("unloadModel") {
       self.engine.unload()
+    }
+
+    // MARK: - Câmera (marco 2)
+
+    AsyncFunction("hasCameraPermission") { () -> Bool in
+      CameraSession.hasPermission()
+    }
+
+    AsyncFunction("requestCameraPermission") { () async -> Bool in
+      await CameraSession.requestPermission()
+    }
+
+    AsyncFunction("startSession") { (options: SessionOptions) -> [String: Any] in
+      self.coordinator.onSample = { [weak self] sample in
+        self?.sendEvent("onTelemetry", sample)
+      }
+      return try self.coordinator.start(sampleIntervalMs: options.sampleIntervalMs)
+    }
+
+    AsyncFunction("stopSession") { () -> [String: Any] in
+      let summary = self.coordinator.stop()
+      self.coordinator.onSample = nil
+      return summary
+    }
+
+    // Se a view sumir sem stopSession, a câmera continuaria ligada gastando
+    // bateria e aquecendo o aparelho — que é justamente o que o marco mede.
+    OnDestroy {
+      _ = self.coordinator.stop()
     }
   }
 }

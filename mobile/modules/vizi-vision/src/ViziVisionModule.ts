@@ -1,18 +1,26 @@
 import { NativeModule, requireNativeModule } from 'expo';
 
-import type { BenchmarkOptions, ModelInfo, NativeProbe, RawMeasurement } from './ViziVision.types';
+import type {
+  BenchmarkOptions, ModelInfo, NativeProbe, RawMeasurement,
+  SessionInfo, SessionOptions, SessionSummary, TelemetrySample,
+} from './ViziVision.types';
 
-declare class ViziVisionModule extends NativeModule<{}> {
-  /** Prova que o código nativo foi compilado e instalado. US1. */
+type Events = {
+  /** ~2 Hz. Nunca por frame — ver contracts/camera-session.md. */
+  onTelemetry(sample: TelemetrySample): void;
+};
+
+declare class ViziVisionModule extends NativeModule<Events> {
   probe(): NativeProbe;
 
-  /** Carrega e, se necessário, compila o modelo. Caro na primeira vez. */
   loadModel(): Promise<ModelInfo>;
-
-  /** Executa a série sobre a imagem embarcada. Devolve latências individuais. */
   runBenchmark(options: BenchmarkOptions): Promise<RawMeasurement>;
-
   unloadModel(): Promise<void>;
+
+  hasCameraPermission(): Promise<boolean>;
+  requestCameraPermission(): Promise<boolean>;
+  startSession(options: SessionOptions): Promise<SessionInfo>;
+  stopSession(): Promise<SessionSummary>;
 }
 
 export default requireNativeModule<ViziVisionModule>('ViziVision');

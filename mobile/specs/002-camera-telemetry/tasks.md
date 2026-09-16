@@ -24,9 +24,9 @@ Caminhos relativos a `mobile/`.
 
 ## Phase 1: Setup
 
-- [ ] T001 Declarar `NSCameraUsageDescription` em `mobile/app.config.js` — sem isso o iOS encerra o app na primeira tentativa de acesso, sem diálogo
-- [ ] T002 [P] Instalar `expo-clipboard` para a exportação do registro (FR-013)
-- [ ] T003 [P] Criar `mobile/src/ui/CameraScreen.tsx` vazio e alternância entre ele e a `BenchScreen` — as duas telas convivem
+- [x] T001 Declarar `NSCameraUsageDescription` em `mobile/app.config.js` — sem isso o iOS encerra o app na primeira tentativa de acesso, sem diálogo — `infoPlist` em `app.config.js`; sem isso o iOS encerra o app sem diálogo
+- [x] T002 [P] Instalar `expo-clipboard` para a exportação do registro (FR-013) — `expo-clipboard ~57.0.2`
+- [x] T003 [P] Criar `mobile/src/ui/CameraScreen.tsx` vazio e alternância entre ele e a `BenchScreen` — as duas telas convivem — abas Câmera/Medição em `App.tsx`; `parts.tsx` extraído para as duas telas
 
 **Checkpoint**: o app abre e alterna entre as duas telas.
 
@@ -38,10 +38,10 @@ Caminhos relativos a `mobile/`.
 
 **⚠️ CRITICAL**: se a captura não estiver sólida, todo problema posterior vai parecer de inferência.
 
-- [ ] T004 Criar `modules/vizi-vision/ios/CameraSession.swift`: `AVCaptureSession`, escolha explícita de dispositivo e formato, delegate em fila dedicada — resolve **R6**
-- [ ] T005 Criar `modules/vizi-vision/ios/FrameGate.swift`: profundidade 1, descarte do mais antigo, contadores de recebidos e descartados
-- [ ] T006 Expor `startSession` / `stopSession` em `ViziVisionModule.swift`, com verificação de permissão e erro legível na tela (FR-011)
-- [ ] T007 Verificar frames chegando: emitir só a contagem de capturados, sem transformação e sem inferência
+- [x] T004 Criar `modules/vizi-vision/ios/CameraSession.swift`: `AVCaptureSession`, escolha explícita de dispositivo e formato, delegate em fila dedicada — resolve **R6** — menor formato com ambos os lados ≥ 640, BGRA, rotação 90° para retrato
+- [x] T005 Criar `modules/vizi-vision/ios/FrameGate.swift`: profundidade 1, descarte do mais antigo, contadores de recebidos e descartados — profundidade 1, contadores de recebidos/descartados/processados
+- [x] T006 Expor `startSession` / `stopSession` em `ViziVisionModule.swift`, com verificação de permissão e erro legível na tela (FR-011) — `startSession`/`stopSession`/permissão, e `OnDestroy` desliga a câmera
+- [x] T007 Verificar frames chegando: emitir só a contagem de capturados, sem transformação e sem inferência — evento `onTelemetry` a 2 Hz com taxas da janela
 
 **Checkpoint**: a contagem de frames sobe na tela. A captura está viva.
 
