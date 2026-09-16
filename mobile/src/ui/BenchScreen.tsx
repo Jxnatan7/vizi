@@ -5,6 +5,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 
 import { ViziVision, type ModelInfo, type NativeProbe, type Measurement } from '../../modules/vizi-vision';
+import { compareWithReference, type Comparison } from '../bench/compareReference';
 import { DEFAULT_OPTIONS, runBenchmark } from '../bench/runBenchmark';
 import { ms } from '../bench/stats';
 import { colors, type Palette } from './theme';
@@ -16,6 +17,7 @@ export default function BenchScreen() {
   const [probe, setProbe] = useState<NativeProbe | null>(null);
   const [model, setModel] = useState<ModelInfo | null>(null);
   const [result, setResult] = useState<Measurement | null>(null);
+  const [comparison, setComparison] = useState<Comparison | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +46,9 @@ export default function BenchScreen() {
     setBusy(true);
     setError(null);
     try {
-      setResult(await runBenchmark(DEFAULT_OPTIONS));
+      const measured = await runBenchmark(DEFAULT_OPTIONS);
+      setResult(measured);
+      setComparison(compareWithReference(measured.instances));
     } catch (e) {
       setError(String(e));
     } finally {
@@ -117,6 +121,37 @@ export default function BenchScreen() {
             <Row c={c} label="térmico" value={result.thermalState} />
             <Row c={c} label="unidades" value={result.executionUnit} />
             <Row c={c} label="instâncias" value={String(result.instances.length)} />
+          </Card>
+        )}
+
+        {comparison && (
+          <Card
+            c={c}
+            border={comparison.pass ? c.ok : c.crit}
+            label={comparison.pass ? 'REFERÊNCIA CONFERE' : 'DIVERGE DA REFERÊNCIA'}>
+            <Row c={c} label="instâncias" value={`${comparison.actualCount} · esperado ${comparison.expectedCount}`} strong />
+            <Row c={c} label="casadas" value={`${comparison.matched} de ${comparison.expectedCount}`} />
+            <Row c={c} label="pior IoU" value={comparison.worstIoU.toFixed(4)} />
+            <Row c={c} label="desvio máx. do centro" value={`${comparison.maxCenterDeltaPx.toFixed(2)} px`} />
+            <Row c={c} label="classes divergentes" value={String(comparison.classMismatches)} />
+          </Card>
+        )}
+
+        {result && result.instances.length > 0 && (
+          <Card c={c} border={c.line} label={`INSTÂNCIAS · ${result.instances.length}`}>
+            <Text style={[styles.mono, { color: c.muted, fontSize: 11 }]}>
+              {'  #  conf    x     y     w     h'}
+            </Text>
+            {result.instances.map((inst, i) => (
+              <Text key={i} style={[styles.mono, { color: c.ink, fontSize: 11 }]}>
+                {String(i).padStart(3)}
+                {inst.score.toFixed(2).padStart(7)}
+                {inst.x.toFixed(0).padStart(6)}
+                {inst.y.toFixed(0).padStart(6)}
+                {inst.width.toFixed(0).padStart(6)}
+                {inst.height.toFixed(0).padStart(6)}
+              </Text>
+            ))}
           </Card>
         )}
 

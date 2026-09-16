@@ -111,8 +111,8 @@ descobriria que o build quebra ao adicionar código nativo.
 ### Implementation for User Story 3
 
 - [x] T031 [US3] Gerar a saída de referência no Colab e commitar `mobile/assets/reference-expected.json` (**FR-010**) — feito, 24 instâncias, conf 0,361–0,922
-- [ ] T032 [US3] Exibir as instâncias detectadas em `mobile/src/ui/BenchScreen.tsx` (**FR-007**)
-- [ ] T033 [US3] Comparar com a referência e verificar **SC-003**: contagem exata, posições e classes dentro da tolerância
+- [x] T032 [US3] Exibir as instâncias detectadas em `mobile/src/ui/BenchScreen.tsx` (**FR-007**) — tabela com confiança e caixa
+- [x] T033 [US3] Comparar com a referência (**SC-003**) — `src/bench/compareReference.ts`, casamento guloso por IoU ≥ 0.9, reporta pior IoU e desvio de centro. **Falta rodar no aparelho**
 
 **Checkpoint**: rápido **e** correto. As três histórias funcionam de forma independente.
 
