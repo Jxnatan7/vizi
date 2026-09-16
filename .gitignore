@@ -32,3 +32,6 @@ AltServerData/
 *.pem
 *.cer
 *.mobileprovision
+
+# Estado local do Expo/Metro
+.expo/

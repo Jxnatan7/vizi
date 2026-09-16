@@ -51,13 +51,16 @@ export default function App() {
             <Row label="núcleos" value={String(probe.processorCount)} c={c} />
             <Row label="memória" value={`${probe.physicalMemoryMB} MB`} c={c} />
             <Row label="baixo consumo" value={probe.lowPowerMode ? 'sim' : 'não'} c={c} />
+            <Row label="bundle" value={__DEV__ ? 'Debug — NÃO medir' : 'Release — válido p/ medir'} c={c} />
           </View>
         )}
 
         {!probe && !error && <Text style={{ color: c.muted }}>consultando…</Text>}
 
-        <Text style={[styles.footer, { color: c.muted }]}>
-          Medição de inferência entra na US2 — ver specs/001-coreml-proof/tasks.md
+        <Text style={[styles.footer, { color: __DEV__ ? c.crit : c.muted }]}>
+          {__DEV__
+            ? 'Bundle de desenvolvimento: o Swift compila sem otimização. Números medidos aqui não valem para o portão do marco — usar o build Release.'
+            : 'Bundle de release: números medidos aqui são válidos para o portão.'}
         </Text>
       </ScrollView>
     </SafeAreaView>

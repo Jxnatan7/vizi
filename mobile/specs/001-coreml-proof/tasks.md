@@ -69,7 +69,7 @@ descobriria que o build quebra ao adicionar código nativo.
 - [x] T013 [US1] Assinar o artefato e instalar no iPhone por USB — app aberto no aparelho
 - [ ] T014 [US1] Verificar **SC-004**: alterar texto em `mobile/App.tsx` e confirmar que aparece sem recompilar
 - [ ] T015 [US1] Verificar **SC-006**: re-assinar e reinstalar o mesmo artefato sem passar pelo CI
-- [ ] T016 [US1] Preencher as seções 🔬 de `specs/001-coreml-proof/quickstart.md` com o procedimento real
+- [x] T016 [US1] Preencher as seções 🔬 de `specs/001-coreml-proof/quickstart.md` com o procedimento real — anisette, fork NG, embrulho do artefato, DDI, ordem do Modo de Desenvolvedor
 
 **Checkpoint**: 🚦 **Portão de risco.** Se T011–T013 não fecharem, parar e reavaliar antes de investir na US2. A saída é conta Apple paga.
 

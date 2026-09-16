@@ -234,11 +234,45 @@ gratuitos e ilimitados — não há orçamento de build a economizar.
 
 ## Parte 4 — Assinar e instalar (a cada compilação, e a cada 7 dias)
 
-Baixar o artefato `vizi-unsigned-ipa` da execução do workflow e então:
+O workflow gera duas variantes. Escolher pelo objetivo:
+
+| artefato | quando |
+|---|---|
+| `vizi-Debug-unsigned-ipa` | desenvolver — traz o dev launcher e carrega o JS do Metro |
+| `vizi-Release-unsigned-ipa` | **medir** — Swift otimizado; o único válido para o SC-001 |
+
+**O GitHub Actions entrega artefatos sempre dentro de um `.zip`.** Extrair antes
+de passar ao AltServer:
 
 ```bash
-./AltServer -u <UDID> -a <seu-apple-id> -p <senha> vizi-unsigned.ipa
+cd ~/Downloads
+unzip -o vizi-Debug-unsigned-ipa.zip     # produz vizi-Debug-unsigned.ipa
 ```
+
+Passar o zip direto faz o AltServer falhar com
+`com.rileytestut.Archive (2)` / *"The app could not be found"* — ele
+descompacta e não encontra `Payload/`. A mensagem não sugere a causa.
+
+**Rodar de fora do repositório.** O AltServer cria `AltServerData/` no diretório
+atual, e dentro dele fica o `.p12` com a **chave privada** do certificado. Este
+repositório é público:
+
+```bash
+cd ~/altserver
+export ALTSERVER_ANISETTE_SERVER=https://ani.sidestore.io
+AltServer -u <UDID> -a <seu-apple-id> -p 'senha' ~/Downloads/vizi-Debug-unsigned.ipa
+```
+
+### Ruído que pode ser ignorado
+
+```
+Failed to install DeveloperDiskImage.dmg ...
+The URL to download the Developer disk image could not be determined.
+```
+
+O AltServer monta a DDI para habilitar JIT, e a lista de URLs dele não cobre o
+iOS 26 — a Apple passou a usar DDI personalizada no iOS 17. **Não bloqueia a
+instalação** e não afeta este projeto, que não depende de JIT.
 
 Um comando faz tudo: autentica na Apple, obtém certificado de desenvolvimento,
 registra o UDID do aparelho, cria o App ID, gera o perfil de provisionamento,

@@ -31,6 +31,19 @@ O caminho que funcionou: fork `jaakkopalvaila/AltServer-Linux` release
 para Windows e automatiza login por AutoHotkey — exige credenciais Apple
 próprias no container e não serve como servidor local trivial.
 
+### Aparelho confirmado (16/09/2026)
+
+Primeira leitura real do `probe()` no alvo:
+
+| | |
+|---|---|
+| sistema | iOS 26.5 (23F75) |
+| núcleos | 6 — A15, 2 performance + 4 eficiência |
+| memória | 5684 MB |
+
+Confirma o alvo da arquitetura e descarta a hipótese de mock: nenhum desses
+valores vem do JavaScript.
+
 ### Achado colateral: Debug e Release não são intercambiáveis
 
 A inspeção do `.ipa` instalado mostrou `main.jsbundle` embutido e **nenhum
