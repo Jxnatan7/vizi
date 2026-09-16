@@ -84,7 +84,7 @@ Caminhos relativos a `mobile/`.
 - [x] T021 [US2] [P] Criar `mobile/src/telemetry/exportSession.ts`: sessão → JSON → área de transferência — `exportSession.ts`; avalia o portão e copia o JSON
 - [x] T022 [US2] Exibir a sessão em andamento na `CameraScreen` — veredito do portão, transições térmicas e botão de cópia
 - [x] T023 [US2] Parar captura e inferência ao sair de primeiro plano, retomar ao voltar (**FR-010**) — `AppState`: sai de primeiro plano, câmera desliga
-- [~] T024 [US2] 🚦 **Sessão de 10 minutos NÃO MEDIDA** — adiada por decisão do autor em 16/09. O portão do marco (SC-001 a SC-003, SC-005, SC-007) segue **sem verificação**. Converter em concluída exige os números
+- [~] T024 [US2] 🚦 **Sessão de 3,6 min medida** (não 10): SC-001, SC-002, SC-003 e SC-005 passam com folga. **SC-007 não mensurável** nessa duração, e a sessão foi em **Debug**. Repetir em Release e por mais tempo antes de declarar fechado
 
 **Checkpoint**: existe resposta sobre sustentação. É o propósito do marco.
 
@@ -108,11 +108,11 @@ Caminhos relativos a `mobile/`.
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T028 [P] Registrar as medições em `specs/002-camera-telemetry/research.md`, fechando R6–R9
-- [ ] T029 Auditar a fronteira: nenhum pixel atravessa; `TelemetrySample` pequena; evento a ~2 Hz e não por frame
-- [ ] T030 Auditar o Swift: nenhuma constante de política (a T037 do marco 1 reprovou nesta mesma verificação)
-- [ ] T031 Verificar **FR-002**: nenhuma marcação desenhada sobre a imagem
-- [ ] T032 Atualizar `mobile/README.md` com o veredito do marco
+- [x] T028 [P] Medições registradas; **R6, R7, R8 e R9 fechadas**
+- [x] T029 Fronteira auditada: amostra de **377 bytes**, 173× abaixo do limite; 754 B/s a 2 Hz contra 287 MB/s de pixels que ficam no nativo
+- [x] T030 Auditoria **reprovou e foi corrigida** de novo: limiares viraram sentinelas inválidas, e `minSide` passou a vir da entrada do modelo
+- [x] T031 **FR-002** verificado no aparelho e no código: a `PreviewView` só enfileira o buffer
+- [x] T032 `mobile/README.md` atualizado com o estado dos dois marcos e as limitações conhecidas
 
 ---
 

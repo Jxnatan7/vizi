@@ -2,10 +2,21 @@
 
 App React Native + Expo de detecção e segmentação em tempo real, on-device.
 
-## Estado: marco 1 concluído ✅
+## Estado
 
-O primeiro marco existia para responder uma pergunta: **a inferência cabe no
-orçamento que a arquitetura assume?** Cabe, com folga de uma ordem de grandeza.
+| marco | | |
+|---|---|---|
+| **1 · Prova de vida do Core ML** | ✅ concluído | 36 de 36 |
+| **2 · Câmera ao vivo e telemetria** | 🟡 implementado, medido parcialmente | 30 de 32 |
+| 3 · Caixas na tela | — | |
+| 4 · Os três relógios | — | |
+| 5 · Máscaras em shader | — | |
+| 6 · Acabamento e adaptação | — | |
+| 7 · Android | — | |
+
+### Marco 1 — a inferência cabe, com folga de uma ordem de grandeza
+
+Existia para responder se a premissa da arquitetura se sustenta. Sustenta.
 
 | | portão | medido no iPhone 14 Plus |
 |---|---|---|
@@ -13,33 +24,55 @@ orçamento que a arquitetura assume?** Cabe, com folga de uma ordem de grandeza.
 | inferência · p95 | < 40 ms | **4,9 ms** |
 | correção | 24 instâncias | **24 de 24, 0 classes divergentes** |
 
-Para comparar: o protótipo em [`../web`](../web) fazia o mesmo trabalho em
-**279 ms** no mesmo aparelho, no caminho wasm/CPU do Safari. São **90×**.
+O protótipo em [`../web`](../web) fazia o mesmo trabalho em **279 ms** no mesmo
+aparelho, no caminho wasm/CPU do Safari. São **90×**.
 
-A 3,1 ms, o modelo cabe cinco vezes dentro de um frame de 60 fps. **O gargalo
-deixou de ser o modelo**: passa a ser captura, composição de máscara e render.
+Também entregou a cadeia de entrega do Linux ao iPhone, sem Mac e sem conta
+Apple paga — GitHub Actions compila sem assinatura, AltServer-Linux assina com
+Apple ID gratuito, instalação por USB.
 
-Medições e o caminho até elas em
-[`specs/001-coreml-proof/research.md`](specs/001-coreml-proof/research.md).
+### Marco 2 — o app processa o mundo a 60 fps
 
-### O que o marco também entregou
+Câmera ao vivo, inferência a cada frame, telemetria. Nada é desenhado sobre a
+imagem ainda — isso é o marco 3.
 
-- **Cadeia de entrega do Linux ao iPhone**, sem Mac e sem conta Apple paga:
-  GitHub Actions compila sem assinatura, AltServer-Linux assina com Apple ID
-  gratuito, instalação por USB. Procedimento em
-  [`specs/001-coreml-proof/quickstart.md`](specs/001-coreml-proof/quickstart.md).
-- **Módulo nativo** `modules/vizi-vision` com Core ML, decodificação e NMS em
-  Swift.
-- **Modelo exportado e verificado**: `imgsz=640` quadrado, fp16, sem NMS no
-  grafo. Shapes em [`models/vizi-seg.shapes.md`](models/vizi-seg.shapes.md).
+Sessão de 3,6 min, `stretch`, build Debug
+([medição](specs/002-camera-telemetry/medicoes/2026-09-16-stretch-debug.json)):
 
-### O que ficou aberto
+| | |
+|---|---|
+| frames | **13091 de 13092** processados |
+| taxa | **60 fps sustentados** |
+| térmico | `nominal` → `nominal`, nenhuma transição |
+| ponta-a-ponta | **39,6 ms** (limite 80) |
+| trabalho por frame | 11,48 ms de um orçamento de 16,67 |
 
-- **Carga do modelo custa ~720 ms** — não afeta o portão, mas é tempo de
-  abertura do app. Endereçar no marco 2.
-- **T025**: `executionUnit` reporta o que foi pedido, não o que rodou. Perdeu
-  urgência — 3,1 ms só é possível no acelerador dedicado.
-- **T015**: reassinatura após 7 dias, verificável só quando o prazo vencer.
+Degradação entre o começo e o fim: inferência −0,9%, fps 0,0%.
+
+**Por que "medido parcialmente":** a sessão foi em **Debug**, com Swift em
+`-Onone` — a decodificação custou ~35× o que custa em Release. E a bateria não
+se moveu em 3,6 min, então o SC-007 segue sem resposta. Repetir em Release e por
+mais tempo antes de declarar fechado.
+
+### O que a medição mudou na arquitetura
+
+A premissa era inferência em ≤ 25 ms, e o desenho dos
+[três relógios](specs/001-coreml-proof/) existia para tornar convincente o
+intervalo entre detecções. **A 3,1 ms cabem cinco inferências num frame de
+60 Hz** — o intervalo praticamente sumiu.
+
+O gargalo deixou de ser o modelo. Passa a ser composição de máscara e render,
+e **nada disso tem número ainda**.
+
+### Limitações conhecidas
+
+- **`dropped` e `queueDepth` não medem nada.** O delegate da câmera é serial na
+  mesma fila da inferência, então o `FrameGate` nunca vê "ocupado". O sinal real
+  de descarte é `fpsCaptured` caindo abaixo de 60.
+- **A carga do modelo custa ~720 ms**, o que aparece como abertura lenta.
+- **`executionUnit` reporta o que foi pedido**, não o que rodou. Perdeu urgência:
+  3,1 ms só é possível no acelerador dedicado.
+- **Reassinatura após 7 dias** ainda não verificada.
 
 ## Desenvolvimento dirigido por spec
 

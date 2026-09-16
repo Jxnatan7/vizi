@@ -63,7 +63,10 @@ final class CameraSession: NSObject {
   ///
   /// Capturar em 4K para reduzir a 640×640 desperdiça banda de memória e
   /// energia, e energia é justamente o que este marco mede.
-  func configure(minSide: Int = 640) throws {
+  /// `minSide` deve vir da entrada do modelo, não de um literal. Hoje coincide
+  /// em 640; se o modelo for reexportado menor, este filtro passa a descartar
+  /// formatos que serviriam.
+  func configure(minSide: Int) throws {
     guard Self.hasPermission() else { throw CameraError.permissionDenied }
     guard let device = AVCaptureDevice.default(
       .builtInWideAngleCamera, for: .video, position: .back)

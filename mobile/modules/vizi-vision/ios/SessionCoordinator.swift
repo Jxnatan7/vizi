@@ -25,8 +25,12 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
     set { modeLock.lock(); _mode = newValue; modeLock.unlock() }
   }
 
-  private var confidenceThreshold: Float = 0.25
-  private var iouThreshold: Float = 0.7
+  // Sentinelas inválidas de propósito. O TypeScript sempre envia os valores em
+  // `start()`; se algum dia deixar de enviar, a detecção zera na hora em vez de
+  // usar um valor plausível e desatualizado — que foi exatamente o modo de
+  // falha que a auditoria T037 do marco 1 encontrou.
+  private var confidenceThreshold: Float = -1
+  private var iouThreshold: Float = -1
 
   /// Janela corrente. Zerada a cada amostra — médias acumuladas escondem
   /// exatamente a degradação que este marco procura.
@@ -65,7 +69,7 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
     self.iouThreshold = iouThreshold
     resetWindow()
     camera.delegate = self
-    try camera.configure()
+    try camera.configure(minSide: engine?.inputWidth ?? 640)
     camera.start()
 
     startedAt = Date()
