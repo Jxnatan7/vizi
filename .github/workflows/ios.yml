@@ -57,6 +57,7 @@ jobs:
 
       - name: Build (unsigned)
         run: |
+          set -o pipefail
           xcodebuild \
             -workspace ios/vizi.xcworkspace \
             -scheme vizi \
@@ -66,9 +67,17 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build
+            build 2>&1 | tee "$RUNNER_TEMP/build.log"
 
-      # Um .ipa e um zip com o .app dentro de Payload/.
+      # O log do xcodebuild e imenso e enterra a causa entre centenas de
+      # avisos de script phase. Este passo isola as linhas que importam.
+      - name: Erros de compilacao
+        if: failure()
+        run: |
+          echo "::group::error:"
+          grep -E "error:" "$RUNNER_TEMP/build.log" | head -40 || echo "(nenhuma linha 'error:' no log)"
+          echo "::endgroup::"
+
       - name: Package .ipa
         run: |
           mkdir -p Payload

@@ -1,7 +1,8 @@
+import CoreGraphics
 import CoreML
+import CoreVideo
 import Foundation
 import ImageIO
-import VideoToolbox
 
 /// Carga do modelo, preparo da entrada e cronometragem.
 ///
@@ -87,7 +88,7 @@ final class InferenceEngine {
       let kv = part.split(separator: ":", maxSplits: 1)
       guard kv.count == 2,
             let k = Int(kv[0].trimmingCharacters(in: .whitespaces)) else { continue }
-      out[k] = kv[1].trimmingCharacters(in: CharacterSet(whitespaces).union(CharacterSet(charactersIn: "\"")))
+      out[k] = kv[1].trimmingCharacters(in: CharacterSet.whitespaces.union(CharacterSet(charactersIn: "\"")))
     }
     return out
   }

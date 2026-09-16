@@ -68,8 +68,9 @@ public class ViziVisionModule: Module {
         "executionUnit": self.engine.requestedComputeUnits,
         "instances": lastInstances.map {
           [
-            "classIndex": $0.classIndex, "score": $0.score,
-            "x": $0.x, "y": $0.y, "width": $0.width, "height": $0.height,
+            "classIndex": $0.classIndex, "score": Double($0.score),
+            "x": Double($0.x), "y": Double($0.y),
+            "width": Double($0.width), "height": Double($0.height),
           ]
         },
       ]
