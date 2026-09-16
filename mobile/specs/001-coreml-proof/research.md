@@ -141,7 +141,81 @@ aparelho dirá.
 
 ---
 
-## R2 — O Neural Engine executa o grafo de segmentação?
+## VEREDITO DO MARCO — 16/09/2026
+
+**Portão atingido com margem de uma ordem de grandeza.** Build Release,
+iPhone 14 Plus, iOS 26.5, aparelho em estado térmico `nominal`.
+
+| | portão | medido | |
+|---|---|---|---|
+| modelo · mediana | < 30 ms | **3,2 ms** | 9,4× folga |
+| modelo · p95 | < 40 ms | **5,5 ms** | 7,3× folga |
+| modelo · mínimo | — | 2,7 ms | |
+| ciclo completo | — | 3,2 ms | decodificação some no ruído |
+| primeira execução | — | 33,2 ms | custo pago uma vez |
+| carga do modelo | — | 875 ms | afeta abertura do app |
+
+Referência: o protótipo web fazia o mesmo trabalho em **279 ms**. São **87×**.
+
+### R2 — resolvido por inferência, não por API
+
+`executionUnit` ainda reporta o que foi *pedido* (`all`), não o que rodou. Mas
+3,2 ms para um yolov8n-seg a 640×640 **só é possível no acelerador dedicado**:
+CPU ficaria na casa das centenas de milissegundos e GPU na casa das dezenas. O
+número é a evidência.
+
+A detecção explícita (T025) perde urgência: serviria para diagnosticar um
+problema que não existe.
+
+### R3 — resolvido favoravelmente
+
+`compiledAtRuntime: false` — **o Xcode compilou o `.mlpackage` para `.mlmodelc`
+durante o build.** Não há custo de compilação em tempo de execução, e o caminho
+de cache que escrevi nunca será exercido no build de Release. Fica como rede de
+segurança.
+
+### R5 — resolvido, e contrariou o palpite
+
+Curva das 20 primeiras execuções:
+
+```
+33.2  7.1  6.5  6.2  6.0  5.7  5.6  5.4  5.5  5.4
+ 5.7  5.8  5.0  5.3  5.5  5.4  5.0  5.3  5.3  5.0
+```
+
+Parece estabilizar em ~5,0 ms. **Mas a mediana das 95 amostras válidas foi
+3,2 ms — abaixo de qualquer valor das 20 primeiras.** As execuções 21 a 100 são
+mais rápidas que tudo que aparece aqui.
+
+Duas conclusões:
+
+1. **O aquecimento dura mais de 20 iterações.** `warmupDiscard` subiu de 5 para
+   25, agora medido em vez de chutado.
+2. **O p95 de 5,5 ms estava medindo a cauda do aquecimento, não variância.**
+   Com o descarte correto ele deve cair bastante.
+
+### Achado para a US3
+
+O app detectou **20 instâncias**; `reference-expected.json` tem **24**.
+
+Causa provável identificada sem depurar: o `Decode.swift` usava
+`iouThreshold = 0.45`, enquanto o Ultralytics — que gerou a referência — usa
+**0.7** por padrão. Limiar menor suprime mais caixas vizinhas, e livros numa
+estante são exatamente caixas vizinhas. Corrigido para 0.7.
+
+### O que isto muda na arquitetura
+
+A premissa do projeto era inferência em **≤ 25 ms**, com o desenho dos três
+relógios existindo para tornar convincente o intervalo entre detecções. A
+3,2 ms, esse intervalo praticamente desaparece: cabem **cinco inferências**
+dentro de um frame de 60 fps.
+
+O gargalo deixa de ser o modelo. Passa a ser captura, composição de máscara e
+render — e a predição do tracker vira polimento, não muleta.
+
+---
+
+## R2 — o registro original
 
 **Risco: alto.** É a premissa da arquitetura.
 

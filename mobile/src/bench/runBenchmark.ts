@@ -5,12 +5,14 @@ import { summarize } from './stats';
 /**
  * A política da medição vive aqui, não no Swift — princípio IV da constituição.
  *
- * `warmupDiscard` começa em 5 por palpite. O número definitivo sai da T029:
- * olhar `warmupCurve` e ver onde a série estabiliza.
+ * `warmupDiscard: 25` veio da medição de 16/09/2026 (T029), não de palpite.
+ * A curva das 20 primeiras execuções cai de 33,2 ms para ~5,0 ms e continua
+ * caindo: a mediana das 95 amostras válidas ficou em 3,2 ms, abaixo de
+ * qualquer valor das 20 primeiras. O aquecimento dura mais de 20 iterações.
  */
 export const DEFAULT_OPTIONS: BenchmarkOptions = {
   repetitions: 100,
-  warmupDiscard: 5,
+  warmupDiscard: 25,
   confidenceThreshold: 0.25,
 };
 

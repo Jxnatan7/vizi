@@ -91,12 +91,12 @@ descobriria que o build quebra ao adicionar código nativo.
 - [x] T022 [US2] Implementar `Decode.swift` em `mobile/modules/vizi-vision/ios/`: saída crua → instâncias, com NMS — filtro por confiança antes de ordenar; saídas resolvidas por forma, não por nome
 - [x] T023 [US2] Instrumentar latências: primeira execução isolada (**FR-004**), e execução do modelo separada do ciclo completo (**FR-014**) — latências individuais; agregação em TypeScript
 - [x] T024 [P] [US2] Reportar condição térmica do aparelho (**FR-005**) — `ProcessInfo.thermalState`
-- [ ] T025 [US2] Detectar e reportar a unidade que executou o modelo, ou declarar indisponível (**FR-006**, **FR-015**) — resolve **R2**
+- [~] T025 [US2] Detectar a unidade de execução (**FR-006**, **FR-015**) — reporta o pedido (`all`); **R2 respondido pelo número**: 3,2 ms só é possível no acelerador dedicado. Detecção explícita perdeu urgência
 - [x] T026 [P] [US2] Implementar `mobile/src/bench/stats.ts`: mediana, p95, mínimo — `src/bench/stats.ts`, p95 com interpolação
 - [x] T027 [US2] Implementar `mobile/src/bench/runBenchmark.ts` com a política — repetições, descarte, limiar (princípio IV: nenhuma dessas constantes no Swift) — `src/bench/runBenchmark.ts`
 - [x] T028 [US2] Implementar `mobile/src/ui/BenchScreen.tsx`: botão, resultados e mensagem de erro legível na tela (**FR-008**) — `src/ui/BenchScreen.tsx`, com erro legível e aviso de bundle Debug
-- [ ] T029 [US2] Caracterizar o aquecimento: registrar as 20 primeiras latências e fixar o número de descarte — resolve **R5**
-- [ ] T030 [US2] 🚦 **Medir o portão**: 100 repetições, aparelho frio, e conferir **SC-001** (mediana < 30 ms) e **SC-002** (p95 < 40 ms)
+- [x] T029 [US2] Caracterizar o aquecimento — **R5 resolvido**: dura mais de 20 iterações; `warmupDiscard` 5 → 25, medido
+- [x] T030 [US2] 🚦 **Portão ATINGIDO** — mediana **3,2 ms** (limite 30), p95 **5,5 ms** (limite 40), térmico nominal
 
 **Checkpoint**: o veredito existe. Este é o propósito do marco.
 

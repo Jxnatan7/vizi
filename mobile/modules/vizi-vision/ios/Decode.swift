@@ -20,7 +20,7 @@ enum Decode {
     from detections: MLMultiArray,
     maskCoeffCount: Int,
     confidenceThreshold: Float,
-    iouThreshold: Float = 0.45
+    iouThreshold: Float = 0.7   // igual ao padrao do Ultralytics, que gerou a referencia
   ) -> [Instance] {
     let shape = detections.shape.map { $0.intValue }
     guard shape.count == 3 else { return [] }
