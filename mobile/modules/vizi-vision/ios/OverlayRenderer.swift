@@ -69,6 +69,8 @@ final class OverlayRenderer {
 
   /// Custo do último desenho, lido pela telemetria (FR-006).
   private(set) var lastDrawMs: Double = 0
+  /// Quantas instâncias o último desenho pintou. Diagnóstico.
+  private(set) var lastDrawnCount: Int = -1
 
   private var link: CADisplayLink?
   private var lastGeneration: UInt64 = .max
@@ -128,6 +130,7 @@ final class OverlayRenderer {
     drawBoxes(visible)
     CATransaction.commit()
 
+    lastDrawnCount = visible.count
     lastDrawMs = (CFAbsoluteTimeGetCurrent() - started) * 1000
   }
 

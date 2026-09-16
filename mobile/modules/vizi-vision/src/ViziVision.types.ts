@@ -124,6 +124,10 @@ export type TelemetrySample = {
   e2eMs: number;
   instanceCount: number;
   transform: TransformMode;
+  /** Diagnóstico do overlay: se a view está montada e o que ela pintou. */
+  overlayAttached: boolean;
+  overlayDrawnCount: number;
+  drawMs: number;
   /** 0 ou 1. Acima disso, o descarte falhou. */
   queueDepth: number;
   dropped: number;

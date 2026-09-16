@@ -131,14 +131,11 @@ public class ViziVisionModule: Module {
       self.coordinator.onSample = { [weak self] sample in
         self?.sendEvent("onTelemetry", sample)
       }
-      // O renderizador lê do store; a inferência publica nele. Nenhum dos dois
-      // espera pelo outro.
-      DispatchQueue.main.async {
-        guard let view = PreviewSink.shared.view else { return }
-        view.overlay.store = self.coordinator.results
-        view.overlay.imageSide = CGFloat(self.engine.inputWidth)
-        view.overlay.start()
-      }
+      // Configuração vai para o sink, não para a view: ela ainda não existe
+      // neste instante, e só nasce quando o JSX reage ao retorno desta função.
+      PreviewSink.shared.store = self.coordinator.results
+      PreviewSink.shared.imageSide = CGFloat(self.engine.inputWidth)
+      PreviewSink.shared.active = true
       return try self.coordinator.start(
         sampleIntervalMs: options.sampleIntervalMs,
         mode: TransformMode(rawValue: options.transform) ?? .stretch,
@@ -160,17 +157,15 @@ public class ViziVisionModule: Module {
       if !record.palette.isEmpty {
         style.palette = record.palette.compactMap { UIColor(hex: $0)?.cgColor }
       }
-      // Trocar estilo não pode custar um frame: aplica na camada existente.
-      DispatchQueue.main.async {
-        PreviewSink.shared.view?.overlay.style = style
-      }
+      // Trocar estilo não pode custar um frame nem depender da view existir.
+      PreviewSink.shared.style = style
     }
 
     // Preview: mostra o buffer JÁ TRANSFORMADO, o mesmo que vai ao modelo.
     View(PreviewView.self) {}
 
     AsyncFunction("stopSession") { () -> [String: Any] in
-      DispatchQueue.main.async { PreviewSink.shared.view?.overlay.stop() }
+      PreviewSink.shared.active = false
       let summary = self.coordinator.stop()
       self.coordinator.onSample = nil
       return summary

@@ -28,6 +28,15 @@ export default function CameraScreen() {
         <Text style={[styles.eyebrow, { color: c.muted }]}>MARCO 2 · CÂMERA</Text>
         <Text style={[styles.title, { color: c.ink }]}>vizi</Text>
 
+        {__DEV__ && (
+          <View style={[styles.banner, { borderColor: c.crit, backgroundColor: c.bgAlt }]}>
+            <Text style={[styles.bannerText, { color: c.crit }]}>
+              Bundle Debug — a decodificação custa ~35× o normal. Não julgue fluidez nem
+              tempos aqui: o overlay pode derrubar frames que em Release não derrubaria.
+            </Text>
+          </View>
+        )}
+
         {error && (
           <Card c={c} border={c.crit} label="ERRO">
             <Text style={{ color: c.ink, fontFamily: 'Menlo', fontSize: 13 }}>{error}</Text>
@@ -101,6 +110,9 @@ export default function CameraScreen() {
             <Row c={c} label="inferência" value={`${sample.inferMs.toFixed(2)} ms`} />
             <Row c={c} label="decodificação" value={`${sample.decodeMs.toFixed(2)} ms`} />
             <Row c={c} label="ponta-a-ponta" value={`${sample.e2eMs.toFixed(1)} ms`} strong />
+            <Row c={c} label="overlay" value={sample.overlayAttached ? 'ligado' : 'DESLIGADO'} />
+            <Row c={c} label="desenhadas" value={String(sample.overlayDrawnCount)} />
+            <Row c={c} label="desenho" value={`${sample.drawMs.toFixed(2)} ms`} />
             <Row c={c} label="fila" value={String(sample.queueDepth)} />
             <Row c={c} label="descartados" value={String(sample.dropped)} />
             <Row c={c} label="térmico" value={sample.thermalState} />
@@ -152,6 +164,8 @@ const styles = StyleSheet.create({
   content: { padding: 24, gap: 14 },
   eyebrow: { fontSize: 11, letterSpacing: 1.4, fontWeight: '600' },
   title: { fontSize: 34, fontWeight: '700', letterSpacing: -0.5, marginTop: -8 },
+  banner: { borderWidth: 1, borderLeftWidth: 3, borderRadius: 4, padding: 12 },
+  bannerText: { fontSize: 12, lineHeight: 17 },
   preview: { aspectRatio: 1, borderWidth: 1, borderRadius: 4, overflow: 'hidden' },
   caption: { fontSize: 11, letterSpacing: 0.6, marginTop: -8 },
   modes: { flexDirection: 'row', gap: 8 },

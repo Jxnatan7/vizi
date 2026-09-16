@@ -79,13 +79,41 @@ final class PreviewView: ExpoView {
 }
 
 /// Ponte entre a fila da câmera e a view, que o React monta e desmonta quando
-/// quiser. Referência fraca: a view manda no próprio ciclo de vida.
+/// quiser.
+///
+/// **Guarda a configuração, em vez de empurrá-la.** A view nasce depois de
+/// `startSession` — o JSX só a monta quando a sessão responde. Empurrar
+/// configuração no start encontrava `view == nil` e falhava em silêncio.
+/// Agora quem se configura é a view, ao nascer, e o sink é a fonte da verdade.
 final class PreviewSink {
   static let shared = PreviewSink()
-  weak var view: PreviewView?
   private init() {}
+
+  weak var view: PreviewView? { didSet { configure() } }
+  var store: ResultStore? { didSet { configure() } }
+  var imageSide: CGFloat = 640 { didSet { configure() } }
+  var style = OverlayStyle() { didSet { configure() } }
+  var active = false { didSet { configure() } }
+
+  /// Diagnóstico: sem console no aparelho, saber se o overlay está ligado e
+  /// quantas instâncias ele desenhou é a diferença entre ver e adivinhar.
+  var isAttached: Bool { view != nil }
+  var lastDrawMs: Double { view?.overlay.lastDrawMs ?? -1 }
+  var lastDrawnCount: Int { view?.overlay.lastDrawnCount ?? -1 }
 
   func push(_ buffer: CVPixelBuffer) {
     view?.enqueue(buffer)
+  }
+
+  private func configure() {
+    guard Thread.isMainThread else {
+      DispatchQueue.main.async { [weak self] in self?.configure() }
+      return
+    }
+    guard let view else { return }
+    view.overlay.store = store
+    view.overlay.imageSide = imageSide
+    view.overlay.style = style
+    if active { view.overlay.start() } else { view.overlay.stop() }
   }
 }
