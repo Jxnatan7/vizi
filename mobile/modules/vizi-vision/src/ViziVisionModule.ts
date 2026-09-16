@@ -2,7 +2,7 @@ import { NativeModule, requireNativeModule } from 'expo';
 
 import type {
   BenchmarkOptions, ModelInfo, NativeProbe, RawMeasurement,
-  SessionInfo, SessionOptions, SessionSummary, TelemetrySample,
+  SessionInfo, SessionOptions, SessionSummary, TelemetrySample, TransformMode,
 } from './ViziVision.types';
 
 type Events = {
@@ -21,6 +21,7 @@ declare class ViziVisionModule extends NativeModule<Events> {
   requestCameraPermission(): Promise<boolean>;
   startSession(options: SessionOptions): Promise<SessionInfo>;
   stopSession(): Promise<SessionSummary>;
+  setTransform(transform: TransformMode): Promise<void>;
 }
 
 export default requireNativeModule<ViziVisionModule>('ViziVision');

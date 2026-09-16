@@ -17,6 +17,9 @@ struct BenchmarkOptions: Record {
 /// Política da sessão de câmera. Também vem do TypeScript — princípio IV.
 struct SessionOptions: Record {
   @Field var sampleIntervalMs: Int = 500
+  @Field var transform: String = "stretch"
+  @Field var confidenceThreshold: Double = 0.25
+  @Field var iouThreshold: Double = 0.7
 }
 
 public class ViziVisionModule: Module {
@@ -108,11 +111,27 @@ public class ViziVisionModule: Module {
     }
 
     AsyncFunction("startSession") { (options: SessionOptions) -> [String: Any] in
+      // O modelo precisa estar carregado antes: carregar leva ~720 ms e faria
+      // os primeiros segundos de telemetria medirem a carga, não a inferência.
+      if !self.engine.isLoaded { try self.engine.load() }
+
+      self.coordinator.engine = self.engine
       self.coordinator.onSample = { [weak self] sample in
         self?.sendEvent("onTelemetry", sample)
       }
-      return try self.coordinator.start(sampleIntervalMs: options.sampleIntervalMs)
+      return try self.coordinator.start(
+        sampleIntervalMs: options.sampleIntervalMs,
+        mode: TransformMode(rawValue: options.transform) ?? .stretch,
+        confidenceThreshold: Float(options.confidenceThreshold),
+        iouThreshold: Float(options.iouThreshold))
     }
+
+    AsyncFunction("setTransform") { (transform: String) in
+      self.coordinator.mode = TransformMode(rawValue: transform) ?? .stretch
+    }
+
+    // Preview: mostra o buffer JÁ TRANSFORMADO, o mesmo que vai ao modelo.
+    View(PreviewView.self) {}
 
     AsyncFunction("stopSession") { () -> [String: Any] in
       let summary = self.coordinator.stop()

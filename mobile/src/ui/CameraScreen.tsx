@@ -1,6 +1,7 @@
-import { SafeAreaView, ScrollView, StyleSheet, Text, useColorScheme } from 'react-native';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
+import { PreviewView, type TransformMode } from '../../modules/vizi-vision';
 import { useSession } from '../camera/useSession';
 import { Button, Card, Row } from './parts';
 import { colors } from './theme';
@@ -14,7 +15,7 @@ import { colors } from './theme';
 export default function CameraScreen() {
   const dark = useColorScheme() === 'dark';
   const c = dark ? colors.dark : colors.light;
-  const { info, sample, summary, error, start, stop } = useSession();
+  const { info, sample, summary, error, transform, start, stop, setTransform } = useSession();
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: c.bg }]}>
@@ -28,6 +29,36 @@ export default function CameraScreen() {
             <Text style={{ color: c.ink, fontFamily: 'Menlo', fontSize: 13 }}>{error}</Text>
           </Card>
         )}
+
+        {info && (
+          <>
+            {/* O que o modelo recebe, não a câmera crua. Imagem deitada ou
+                objetos distorcidos aparecem aqui antes de virar meia tarde de
+                investigação. */}
+            <View style={[styles.preview, { borderColor: c.line }]}>
+              <PreviewView style={StyleSheet.absoluteFill} />
+            </View>
+            <Text style={[styles.caption, { color: c.muted }]}>
+              Entrada do modelo · {transform}
+            </Text>
+          </>
+        )}
+
+        <View style={styles.modes}>
+          {(['stretch', 'centerCrop', 'letterbox'] as TransformMode[]).map((m) => (
+            <Pressable
+              key={m}
+              onPress={() => setTransform(m)}
+              style={[styles.mode, {
+                borderColor: transform === m ? c.ok : c.line,
+                backgroundColor: c.bgAlt,
+              }]}>
+              <Text style={{ color: transform === m ? c.ok : c.muted, fontSize: 12, fontWeight: '600' }}>
+                {m}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
 
         <Button c={c} onPress={info ? stop : start} disabled={false}
           title={info ? 'Parar sessão' : 'Iniciar sessão'} />
@@ -43,6 +74,11 @@ export default function CameraScreen() {
           <Card c={c} border={c.ok} label="TELEMETRIA · JANELA">
             <Row c={c} label="frames capturados" value={`${sample.fpsCaptured.toFixed(1)} /s`} strong />
             <Row c={c} label="frames processados" value={`${sample.fpsInferred.toFixed(1)} /s`} strong />
+            <Row c={c} label="objetos" value={String(sample.instanceCount)} strong />
+            <Row c={c} label="transformação" value={`${sample.transformMs.toFixed(2)} ms`} />
+            <Row c={c} label="inferência" value={`${sample.inferMs.toFixed(2)} ms`} />
+            <Row c={c} label="decodificação" value={`${sample.decodeMs.toFixed(2)} ms`} />
+            <Row c={c} label="ponta-a-ponta" value={`${sample.e2eMs.toFixed(1)} ms`} strong />
             <Row c={c} label="fila" value={String(sample.queueDepth)} />
             <Row c={c} label="descartados" value={String(sample.dropped)} />
             <Row c={c} label="térmico" value={sample.thermalState} />
@@ -69,4 +105,8 @@ const styles = StyleSheet.create({
   content: { padding: 24, gap: 14 },
   eyebrow: { fontSize: 11, letterSpacing: 1.4, fontWeight: '600' },
   title: { fontSize: 34, fontWeight: '700', letterSpacing: -0.5, marginTop: -8 },
+  preview: { aspectRatio: 1, borderWidth: 1, borderRadius: 4, overflow: 'hidden' },
+  caption: { fontSize: 11, letterSpacing: 0.6, marginTop: -8 },
+  modes: { flexDirection: 'row', gap: 8 },
+  mode: { flex: 1, borderWidth: 1, borderRadius: 4, paddingVertical: 10, alignItems: 'center' },
 });

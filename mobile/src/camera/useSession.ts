@@ -3,12 +3,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ViziVision,
   type SessionInfo,
+  type SessionOptions,
   type SessionSummary,
   type TelemetrySample,
+  type TransformMode,
 } from '../../modules/vizi-vision';
 
 /** Política da sessão. Vive em TypeScript — princípio IV. */
-export const SAMPLE_INTERVAL_MS = 500;
+export const DEFAULT_SESSION: SessionOptions = {
+  sampleIntervalMs: 500,
+  // 'stretch' é o padrão do Roboflow. Ainda NÃO confirmado — ver US3.
+  transform: 'stretch',
+  confidenceThreshold: 0.25,
+  iouThreshold: 0.7,
+};
 
 export function useSession() {
   const [info, setInfo] = useState<SessionInfo | null>(null);
@@ -24,6 +32,13 @@ export function useSession() {
     return () => sub.remove();
   }, []);
 
+  const [transform, setTransformState] = useState<TransformMode>(DEFAULT_SESSION.transform);
+
+  const setTransform = useCallback(async (next: TransformMode) => {
+    setTransformState(next);
+    if (running.current) await ViziVision.setTransform(next);
+  }, []);
+
   const start = useCallback(async () => {
     setError(null);
     try {
@@ -34,12 +49,12 @@ export function useSession() {
         }
       }
       setSummary(null);
-      setInfo(await ViziVision.startSession({ sampleIntervalMs: SAMPLE_INTERVAL_MS }));
+      setInfo(await ViziVision.startSession({ ...DEFAULT_SESSION, transform }));
       running.current = true;
     } catch (e) {
       setError(String(e));
     }
-  }, []);
+  }, [transform]);
 
   const stop = useCallback(async () => {
     if (!running.current) return;
@@ -58,5 +73,8 @@ export function useSession() {
   // aquecendo o aparelho, que é exatamente o que este marco mede.
   useEffect(() => () => void stop(), [stop]);
 
-  return { info, sample, summary, error, start, stop, isRunning: running.current };
+  return {
+    info, sample, summary, error, transform,
+    start, stop, setTransform, isRunning: running.current,
+  };
 }

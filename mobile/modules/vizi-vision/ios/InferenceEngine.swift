@@ -30,6 +30,7 @@ final class InferenceEngine {
   private(set) var inputWidth = 0
   private(set) var inputHeight = 0
   private(set) var maskCoeffCount = 32
+  var isLoaded: Bool { model != nil }
   private(set) var classes: [Int: String] = [:]
   private(set) var requestedComputeUnits = "all"
   private(set) var compiledAtRuntime = false
@@ -133,17 +134,31 @@ final class InferenceEngine {
 
   struct RunResult {
     var modelMs: Double
+    var decodeMs: Double
     var cycleMs: Double
     var instances: [Instance]
   }
 
+  /// Marco 1: sobre a imagem de referência embarcada.
   func runOnce(confidenceThreshold: Float, iouThreshold: Float) throws -> RunResult {
-    guard let model, let referenceBuffer else { throw EngineError.notLoaded }
+    guard let referenceBuffer else { throw EngineError.notLoaded }
+    return try run(on: referenceBuffer,
+                   confidenceThreshold: confidenceThreshold,
+                   iouThreshold: iouThreshold)
+  }
+
+  /// Marco 2: sobre um frame da câmera já transformado.
+  ///
+  /// O buffer precisa ter exatamente as dimensões de entrada do modelo — o
+  /// Core ML não redimensiona buffer de pixel, e um tamanho diferente falha em
+  /// vez de escalar.
+  func run(on buffer: CVPixelBuffer, confidenceThreshold: Float, iouThreshold: Float) throws -> RunResult {
+    guard let model else { throw EngineError.notLoaded }
 
     let cycleStart = CFAbsoluteTimeGetCurrent()
 
     let provider = try MLDictionaryFeatureProvider(
-      dictionary: [inputName: MLFeatureValue(pixelBuffer: referenceBuffer)])
+      dictionary: [inputName: MLFeatureValue(pixelBuffer: buffer)])
 
     let modelStart = CFAbsoluteTimeGetCurrent()
     let out = try model.prediction(from: provider)
@@ -156,6 +171,7 @@ final class InferenceEngine {
     }
     guard let detections else { throw EngineError.badOutput("saída de detecção ausente") }
 
+    let decodeStart = CFAbsoluteTimeGetCurrent()
     let instances = Decode.instances(
       from: detections,
       maskCoeffCount: maskCoeffCount,
@@ -163,9 +179,11 @@ final class InferenceEngine {
       inputWidth: inputWidth,
       inputHeight: inputHeight,
       iouThreshold: iouThreshold)
+    let decodeMs = (CFAbsoluteTimeGetCurrent() - decodeStart) * 1000
 
     return RunResult(
       modelMs: modelMs,
+      decodeMs: decodeMs,
       cycleMs: (CFAbsoluteTimeGetCurrent() - cycleStart) * 1000,
       instances: instances)
   }

@@ -91,9 +91,15 @@ export type Measurement = {
 // Marco 2 — sessão de câmera
 // ---------------------------------------------------------------------------
 
+/** Como o frame da câmera vira o quadrado que o modelo espera. */
+export type TransformMode = 'stretch' | 'centerCrop' | 'letterbox';
+
 export type SessionOptions = {
   /** Cadência do evento de telemetria. Nunca menor que 100 ms. */
   sampleIntervalMs: number;
+  transform: TransformMode;
+  confidenceThreshold: number;
+  iouThreshold: number;
 };
 
 export type SessionInfo = {
@@ -108,6 +114,14 @@ export type TelemetrySample = {
   t: number;
   fpsCaptured: number;
   fpsInferred: number;
+  /** Medianas da janela, não acumuladas. */
+  transformMs: number;
+  inferMs: number;
+  decodeMs: number;
+  /** Do carimbo do próprio frame até o resultado pronto (FR-009). */
+  e2eMs: number;
+  instanceCount: number;
+  transform: TransformMode;
   /** 0 ou 1. Acima disso, o descarte falhou. */
   queueDepth: number;
   dropped: number;

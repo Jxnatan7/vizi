@@ -55,14 +55,14 @@ Caminhos relativos a `mobile/`.
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Criar `modules/vizi-vision/ios/FrameTransform.swift`: as três transformações sobre `CVPixelBufferPool` reutilizado — resolve **R7**
-- [ ] T009 [US1] Criar `modules/vizi-vision/ios/PreviewView.swift`: Expo Module View com `AVSampleBufferDisplayLayer`
-- [ ] T010 [US1] Ligar o preview ao buffer **transformado**, com retenção explícita nos dois caminhos — resolve **R8**; se o pool esvaziar, a captura trava
+- [x] T008 [US1] Criar `modules/vizi-vision/ios/FrameTransform.swift`: as três transformações sobre `CVPixelBufferPool` reutilizado — resolve **R7** — Core Image sobre Metal, `CVPixelBufferPool` reutilizado, cinza 114 no letterbox
+- [x] T009 [US1] Criar `modules/vizi-vision/ios/PreviewView.swift`: Expo Module View com `AVSampleBufferDisplayLayer` — `AVSampleBufferDisplayLayer`, exibição imediata
+- [x] T010 [US1] Ligar o preview ao buffer **transformado**, com retenção explícita nos dois caminhos — resolve **R8**; se o pool esvaziar, a captura trava — preview e inferência recebem o MESMO buffer transformado; pool com 6 de folga
 - [ ] T011 [US1] 🚦 Verificar orientação olhando o preview — resolve **R9**. Imagem deitada invalida toda medição posterior
-- [ ] T012 [US1] Adaptar `InferenceEngine.runOnce` para aceitar buffer externo em vez do de referência
-- [ ] T013 [US1] Emitir `onTelemetry` a ~2 Hz com a contagem — **nunca por frame** (princípios II e III)
-- [ ] T014 [US1] Montar `CameraScreen.tsx`: preview, contagem, iniciar e parar
-- [ ] T015 [US1] Estado de permissão negada, explicando como conceder (FR-011)
+- [x] T012 [US1] Adaptar `InferenceEngine.runOnce` para aceitar buffer externo em vez do de referência — `InferenceEngine.run(on:)`, com `decodeMs` separado
+- [x] T013 [US1] Emitir `onTelemetry` a ~2 Hz com a contagem — **nunca por frame** (princípios II e III) — contagem e medianas da janela no evento de 2 Hz
+- [x] T014 [US1] Montar `CameraScreen.tsx`: preview, contagem, iniciar e parar — preview quadrado, seletor de transformação e tempos por estágio
+- [x] T015 [US1] Estado de permissão negada, explicando como conceder (FR-011) — mensagem explicando como conceder em Ajustes
 
 **Checkpoint**: o app processa o mundo. Primeira vez no projeto.
 
@@ -98,7 +98,7 @@ Caminhos relativos a `mobile/`.
 
 ### Implementation for User Story 3
 
-- [ ] T025 [US3] Seletor de transformação na `CameraScreen`, trocável com a sessão rodando (**FR-005**)
+- [x] T025 [US3] Seletor de transformação na `CameraScreen`, trocável com a sessão rodando (**FR-005**) — seletor trocável com a sessão rodando
 - [ ] T026 [US3] Três sessões de 1 minuto, mesma cena e mesmo apoio, comparando contagem e estabilidade
 - [ ] T027 [US3] Confirmar no Roboflow qual Resize foi usado e fixar o padrão — **confirmação e medição precisam concordar**; se discordarem, a causa merece investigação, não escolha arbitrária
 
