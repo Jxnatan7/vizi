@@ -1,8 +1,10 @@
+import { useMemo, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
 import { PreviewView, type TransformMode } from '../../modules/vizi-vision';
 import { useSession } from '../camera/useSession';
+import { copySessionToClipboard, evaluateGate } from '../telemetry/exportSession';
 import { Button, Card, Row } from './parts';
 import { colors } from './theme';
 
@@ -15,7 +17,9 @@ import { colors } from './theme';
 export default function CameraScreen() {
   const dark = useColorScheme() === 'dark';
   const c = dark ? colors.dark : colors.light;
-  const { info, sample, summary, error, transform, start, stop, setTransform } = useSession();
+  const { info, sample, session, error, transform, start, stop, setTransform } = useSession();
+  const [copied, setCopied] = useState(false);
+  const verdicts = useMemo(() => (session ? evaluateGate(session) : []), [session]);
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: c.bg }]}>
@@ -87,13 +91,38 @@ export default function CameraScreen() {
           </Card>
         )}
 
-        {summary && (
-          <Card c={c} border={c.line} label="SESSÃO ENCERRADA">
-            <Row c={c} label="duração" value={`${(summary.durationMs / 1000).toFixed(1)} s`} />
-            <Row c={c} label="recebidos" value={String(summary.received)} />
-            <Row c={c} label="processados" value={String(summary.processed)} />
-            <Row c={c} label="descartados" value={String(summary.dropped)} />
-          </Card>
+        {session && (
+          <>
+            <Card c={c} border={verdicts.every((v) => v.pass) ? c.ok : c.crit}
+              label={verdicts.every((v) => v.pass) ? 'PORTÃO ATINGIDO' : 'PORTÃO NÃO ATINGIDO'}>
+              {verdicts.map((v) => (
+                <Row key={v.label} c={c} label={`${v.pass ? '✓' : '✗'} ${v.label}`} value={v.detail} />
+              ))}
+            </Card>
+
+            <Card c={c} border={c.line} label="SESSÃO">
+              <Row c={c} label="duração" value={`${(session.durationMs / 1000 / 60).toFixed(1)} min`} />
+              <Row c={c} label="transformação" value={session.transform} />
+              <Row c={c} label="frames" value={`${session.processed} de ${session.received}`} />
+              <Row c={c} label="térmico" value={`${session.thermalAtStart} → ${session.thermalAtEnd}`} />
+              <Row c={c} label="amostras" value={`${session.samples.length}${session.truncated ? ' (truncado)' : ''}`} />
+            </Card>
+
+            {session.thermalTransitions.length > 0 && (
+              <Card c={c} border={c.warn} label="TRANSIÇÕES TÉRMICAS">
+                {session.thermalTransitions.map((tr, i) => (
+                  <Row key={i} c={c} label={`${(tr.t / 1000 / 60).toFixed(1)} min`}
+                    value={`${tr.from} → ${tr.to}`} />
+                ))}
+              </Card>
+            )}
+
+            <Button c={c} disabled={false} title={copied ? 'Copiado ✓' : 'Copiar sessão (JSON)'}
+              onPress={async () => {
+                await copySessionToClipboard(session);
+                setCopied(true);
+              }} />
+          </>
         )}
       </ScrollView>
     </SafeAreaView>

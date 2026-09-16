@@ -58,7 +58,7 @@ Caminhos relativos a `mobile/`.
 - [x] T008 [US1] Criar `modules/vizi-vision/ios/FrameTransform.swift`: as três transformações sobre `CVPixelBufferPool` reutilizado — resolve **R7** — Core Image sobre Metal, `CVPixelBufferPool` reutilizado, cinza 114 no letterbox
 - [x] T009 [US1] Criar `modules/vizi-vision/ios/PreviewView.swift`: Expo Module View com `AVSampleBufferDisplayLayer` — `AVSampleBufferDisplayLayer`, exibição imediata
 - [x] T010 [US1] Ligar o preview ao buffer **transformado**, com retenção explícita nos dois caminhos — resolve **R8**; se o pool esvaziar, a captura trava — preview e inferência recebem o MESMO buffer transformado; pool com 6 de folga
-- [ ] T011 [US1] 🚦 Verificar orientação olhando o preview — resolve **R9**. Imagem deitada invalida toda medição posterior
+- [x] T011 [US1] 🚦 Orientação verificada no preview — **R9 resolvida**, imagem em retrato correta
 - [x] T012 [US1] Adaptar `InferenceEngine.runOnce` para aceitar buffer externo em vez do de referência — `InferenceEngine.run(on:)`, com `decodeMs` separado
 - [x] T013 [US1] Emitir `onTelemetry` a ~2 Hz com a contagem — **nunca por frame** (princípios II e III) — contagem e medianas da janela no evento de 2 Hz
 - [x] T014 [US1] Montar `CameraScreen.tsx`: preview, contagem, iniciar e parar — preview quadrado, seletor de transformação e tempos por estágio
@@ -76,15 +76,15 @@ Caminhos relativos a `mobile/`.
 
 ### Implementation for User Story 2
 
-- [ ] T016 [US2] Criar `modules/vizi-vision/ios/Telemetry.swift`: buffer circular limitado, com aviso de truncamento
-- [ ] T017 [US2] Medir latência ponta-a-ponta a partir do `presentationTimeStamp` do frame (**FR-009**) — não do início do processamento
-- [ ] T018 [US2] [P] Registrar estado térmico, bateria e o instante de cada transição térmica (**FR-007**)
-- [ ] T019 [US2] Separar os tempos de transformação, inferência e decodificação — é o que responde se a R7 virou problema
-- [ ] T020 [US2] Montar a `Session` e devolvê-la em `stopSession`, com condições iniciais
-- [ ] T021 [US2] [P] Criar `mobile/src/telemetry/exportSession.ts`: sessão → JSON → área de transferência
-- [ ] T022 [US2] Exibir a sessão em andamento na `CameraScreen`
-- [ ] T023 [US2] Parar captura e inferência ao sair de primeiro plano, retomar ao voltar (**FR-010**)
-- [ ] T024 [US2] 🚦 **Rodar a sessão de 10 minutos** conforme o protocolo do `quickstart.md` e conferir SC-001 a SC-005, SC-007
+- [x] T016 [US2] Criar `modules/vizi-vision/ios/Telemetry.swift`: buffer circular limitado, com aviso de truncamento — buffer circular de 4000 amostras (~33 min), com aviso de truncamento
+- [x] T017 [US2] Medir latência ponta-a-ponta a partir do `presentationTimeStamp` do frame (**FR-009**) — não do início do processamento — `CMClockGetHostTimeClock` menos o carimbo do frame
+- [x] T018 [US2] [P] Registrar estado térmico, bateria e o instante de cada transição térmica (**FR-007**) — térmico, bateria e o instante de cada transição
+- [x] T019 [US2] Separar os tempos de transformação, inferência e decodificação — é o que responde se a R7 virou problema — transformação, inferência e decodificação separadas
+- [x] T020 [US2] Montar a `Session` e devolvê-la em `stopSession`, com condições iniciais — `Session` com condições iniciais e finais, amostras e transições
+- [x] T021 [US2] [P] Criar `mobile/src/telemetry/exportSession.ts`: sessão → JSON → área de transferência — `exportSession.ts`; avalia o portão e copia o JSON
+- [x] T022 [US2] Exibir a sessão em andamento na `CameraScreen` — veredito do portão, transições térmicas e botão de cópia
+- [x] T023 [US2] Parar captura e inferência ao sair de primeiro plano, retomar ao voltar (**FR-010**) — `AppState`: sai de primeiro plano, câmera desliga
+- [~] T024 [US2] 🚦 **Sessão de 10 minutos NÃO MEDIDA** — adiada por decisão do autor em 16/09. O portão do marco (SC-001 a SC-003, SC-005, SC-007) segue **sem verificação**. Converter em concluída exige os números
 
 **Checkpoint**: existe resposta sobre sustentação. É o propósito do marco.
 
@@ -99,8 +99,8 @@ Caminhos relativos a `mobile/`.
 ### Implementation for User Story 3
 
 - [x] T025 [US3] Seletor de transformação na `CameraScreen`, trocável com a sessão rodando (**FR-005**) — seletor trocável com a sessão rodando
-- [ ] T026 [US3] Três sessões de 1 minuto, mesma cena e mesmo apoio, comparando contagem e estabilidade
-- [ ] T027 [US3] Confirmar no Roboflow qual Resize foi usado e fixar o padrão — **confirmação e medição precisam concordar**; se discordarem, a causa merece investigação, não escolha arbitrária
+- [x] T026 [US3] Transformações comparadas no aparelho — **`stretch` escolhida**, concordando com o registro do Roboflow
+- [x] T027 [US3] Roboflow **confirmado**: 640×640 preset YOLOv8 → Stretch. Registro e medição concordam; `stretch` fixado como padrão — **confirmação e medição precisam concordar**; se discordarem, a causa merece investigação, não escolha arbitrária
 
 **Checkpoint**: a geometria deixou de ser suposição.
 

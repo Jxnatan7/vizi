@@ -13,6 +13,7 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
   private let camera = CameraSession()
   private let gate = FrameGate()
   private let transform = FrameTransform()
+  private let telemetry = Telemetry()
 
   /// Carregado pelo módulo antes de iniciar a sessão.
   weak var engine: InferenceEngine?
@@ -36,6 +37,11 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
   private var e2eMs: [Double] = []
   private var lastInstanceCount = 0
 
+  /// Sem as condições iniciais, uma sessão não é comparável com outra. O
+  /// protótipo web mediu 20% de variação no mesmo modelo só por temperatura.
+  private var thermalAtStart = "unknown"
+  private var batteryAtStart: Double = -1
+
   private var timer: DispatchSourceTimer?
   private let timerQueue = DispatchQueue(label: "com.jxnatan7.vizi.telemetry")
 
@@ -53,6 +59,7 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
   func start(sampleIntervalMs: Int, mode: TransformMode,
              confidenceThreshold: Float, iouThreshold: Float) throws -> [String: Any] {
     gate.reset()
+    telemetry.reset()
     self.mode = mode
     self.confidenceThreshold = confidenceThreshold
     self.iouThreshold = iouThreshold
@@ -65,12 +72,16 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
     lastSampleAt = startedAt
     lastReceived = 0
     lastProcessed = 0
+    thermalAtStart = InferenceEngine.thermalStateLabel()
+    batteryAtStart = Self.batteryLevel()
     startTimer(intervalMs: max(100, sampleIntervalMs))
 
     return [
       "captureWidth": camera.captureWidth,
       "captureHeight": camera.captureHeight,
       "maxFrameRate": camera.maxFrameRate,
+      "thermalAtStart": thermalAtStart,
+      "batteryAtStart": batteryAtStart,
     ]
   }
 
@@ -79,11 +90,21 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
     timer = nil
     camera.stop()
     camera.delegate = nil
+    let snap = telemetry.snapshot()
     return [
+      "startedAt": startedAt.timeIntervalSince1970 * 1000,
       "durationMs": Date().timeIntervalSince(startedAt) * 1000,
       "received": gate.received,
       "processed": gate.processed,
       "dropped": gate.dropped,
+      "transform": mode.rawValue,
+      "thermalAtStart": thermalAtStart,
+      "batteryAtStart": batteryAtStart,
+      "thermalAtEnd": InferenceEngine.thermalStateLabel(),
+      "batteryAtEnd": Self.batteryLevel(),
+      "samples": snap.samples,
+      "thermalTransitions": snap.transitions,
+      "truncated": snap.truncated,
     ]
   }
 
@@ -142,6 +163,7 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
     lastSampleAt = now
     lastReceived = received
     lastProcessed = processed
+    telemetry.record(payload)
     onSample?(payload)
   }
 

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
 import {
   ViziVision,
   type SessionInfo,
   type SessionOptions,
-  type SessionSummary,
+  type Session,
   type TelemetrySample,
   type TransformMode,
 } from '../../modules/vizi-vision';
@@ -21,7 +22,7 @@ export const DEFAULT_SESSION: SessionOptions = {
 export function useSession() {
   const [info, setInfo] = useState<SessionInfo | null>(null);
   const [sample, setSample] = useState<TelemetrySample | null>(null);
-  const [summary, setSummary] = useState<SessionSummary | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
   const running = useRef(false);
 
@@ -48,7 +49,7 @@ export function useSession() {
           return;
         }
       }
-      setSummary(null);
+      setSession(null);
       setInfo(await ViziVision.startSession({ ...DEFAULT_SESSION, transform }));
       running.current = true;
     } catch (e) {
@@ -59,7 +60,7 @@ export function useSession() {
   const stop = useCallback(async () => {
     if (!running.current) return;
     try {
-      setSummary(await ViziVision.stopSession());
+      setSession(await ViziVision.stopSession());
     } catch (e) {
       setError(String(e));
     } finally {
@@ -69,12 +70,20 @@ export function useSession() {
     }
   }, []);
 
-  // A câmera não pode sobreviver à tela: continuaria gastando bateria e
-  // aquecendo o aparelho, que é exatamente o que este marco mede.
+  // A câmera não pode sobreviver à tela nem ao segundo plano: continuaria
+  // gastando bateria e aquecendo o aparelho, que é exatamente o que este marco
+  // mede. FR-010.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' && running.current) void stop();
+    });
+    return () => sub.remove();
+  }, [stop]);
+
   useEffect(() => () => void stop(), [stop]);
 
   return {
-    info, sample, summary, error, transform,
+    info, sample, session, error, transform,
     start, stop, setTransform, isRunning: running.current,
   };
 }

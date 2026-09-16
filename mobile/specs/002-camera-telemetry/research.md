@@ -70,6 +70,21 @@ de preview.**
 
 ---
 
+## Geometria — confirmada pelo autor (16/09/2026)
+
+O dataset foi montado no Roboflow com **resize 640×640, preset YOLOv8**, cujo
+modo padrão é **Stretch to**. As fotos vieram do próprio iPhone 14 Plus, câmera
+traseira sem zoom, e passaram por aumento de dados.
+
+**Logo `stretch` é a transformação correta** — e já é o padrão em
+`DEFAULT_SESSION`. A câmera entrega 4:3 e é esticada para o quadrado, do mesmo
+jeito que as fotos de treino foram.
+
+As outras duas continuam implementadas: servem de controle. Se `stretch` não
+produzir a melhor contagem no aparelho, a discordância entre o registro e a
+medição é sinal de que algo mais está errado — e aí vale investigar, não
+escolher a que der melhor número.
+
 ## Já decidido, sem pesquisa
 
 | Decisão | Valor | Por quê |

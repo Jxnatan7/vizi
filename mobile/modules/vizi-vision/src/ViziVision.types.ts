@@ -106,6 +106,8 @@ export type SessionInfo = {
   captureWidth: number;
   captureHeight: number;
   maxFrameRate: number;
+  thermalAtStart: string;
+  batteryAtStart: number;
 };
 
 /** Uma leitura periódica. Taxas são da janela, não acumuladas. */
@@ -131,9 +133,27 @@ export type TelemetrySample = {
   lowPowerMode: boolean;
 };
 
-export type SessionSummary = {
+export type ThermalTransition = {
+  t: number;
+  from: string;
+  to: string;
+};
+
+/** O que `stopSession` devolve. A única travessia grande, e acontece uma vez. */
+export type Session = {
+  startedAt: number;
   durationMs: number;
   received: number;
   processed: number;
   dropped: number;
+  transform: TransformMode;
+  /** Sem as condições iniciais, uma sessão não é comparável com outra. */
+  thermalAtStart: string;
+  batteryAtStart: number;
+  thermalAtEnd: string;
+  batteryAtEnd: number;
+  samples: TelemetrySample[];
+  thermalTransitions: ThermalTransition[];
+  /** true = amostras antigas foram descartadas pelo buffer circular. */
+  truncated: boolean;
 };
