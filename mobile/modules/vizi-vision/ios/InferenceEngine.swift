@@ -137,7 +137,7 @@ final class InferenceEngine {
     var instances: [Instance]
   }
 
-  func runOnce(confidenceThreshold: Float) throws -> RunResult {
+  func runOnce(confidenceThreshold: Float, iouThreshold: Float) throws -> RunResult {
     guard let model, let referenceBuffer else { throw EngineError.notLoaded }
 
     let cycleStart = CFAbsoluteTimeGetCurrent()
@@ -161,7 +161,8 @@ final class InferenceEngine {
       maskCoeffCount: maskCoeffCount,
       confidenceThreshold: confidenceThreshold,
       inputWidth: inputWidth,
-      inputHeight: inputHeight)
+      inputHeight: inputHeight,
+      iouThreshold: iouThreshold)
 
     return RunResult(
       modelMs: modelMs,

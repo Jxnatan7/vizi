@@ -1,8 +1,45 @@
 # vizi mobile
 
-App React Native + Expo de detecção e segmentação de objetos em tempo real,
-on-device. **Ainda não implementado** — o repositório está configurado para
-Spec-Driven Development e o marco 1 é o próximo passo.
+App React Native + Expo de detecção e segmentação em tempo real, on-device.
+
+## Estado: marco 1 concluído ✅
+
+O primeiro marco existia para responder uma pergunta: **a inferência cabe no
+orçamento que a arquitetura assume?** Cabe, com folga de uma ordem de grandeza.
+
+| | portão | medido no iPhone 14 Plus |
+|---|---|---|
+| inferência · mediana | < 30 ms | **3,1 ms** |
+| inferência · p95 | < 40 ms | **4,9 ms** |
+| correção | 24 instâncias | **24 de 24, 0 classes divergentes** |
+
+Para comparar: o protótipo em [`../web`](../web) fazia o mesmo trabalho em
+**279 ms** no mesmo aparelho, no caminho wasm/CPU do Safari. São **90×**.
+
+A 3,1 ms, o modelo cabe cinco vezes dentro de um frame de 60 fps. **O gargalo
+deixou de ser o modelo**: passa a ser captura, composição de máscara e render.
+
+Medições e o caminho até elas em
+[`specs/001-coreml-proof/research.md`](specs/001-coreml-proof/research.md).
+
+### O que o marco também entregou
+
+- **Cadeia de entrega do Linux ao iPhone**, sem Mac e sem conta Apple paga:
+  GitHub Actions compila sem assinatura, AltServer-Linux assina com Apple ID
+  gratuito, instalação por USB. Procedimento em
+  [`specs/001-coreml-proof/quickstart.md`](specs/001-coreml-proof/quickstart.md).
+- **Módulo nativo** `modules/vizi-vision` com Core ML, decodificação e NMS em
+  Swift.
+- **Modelo exportado e verificado**: `imgsz=640` quadrado, fp16, sem NMS no
+  grafo. Shapes em [`models/vizi-seg.shapes.md`](models/vizi-seg.shapes.md).
+
+### O que ficou aberto
+
+- **Carga do modelo custa ~720 ms** — não afeta o portão, mas é tempo de
+  abertura do app. Endereçar no marco 2.
+- **T025**: `executionUnit` reporta o que foi pedido, não o que rodou. Perdeu
+  urgência — 3,1 ms só é possível no acelerador dedicado.
+- **T015**: reassinatura após 7 dias, verificável só quando o prazo vencer.
 
 ## Desenvolvimento dirigido por spec
 

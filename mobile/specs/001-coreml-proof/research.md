@@ -206,6 +206,24 @@ Duas conclusões:
 
 O p95 caiu ao descartar 25 em vez de 5: era cauda de aquecimento, não variância.
 
+### Medição final — 16/09/2026 ✅ MARCO FECHADO
+
+| | portão | medido |
+|---|---|---|
+| modelo · mediana | < 30 ms | **3,1 ms** |
+| modelo · p95 | < 40 ms | **4,9 ms** |
+| modelo · mínimo | — | 2,7 ms |
+| ciclo completo | — | 3,2 ms |
+| primeira execução | — | 15,8 ms |
+| carga do modelo | — | **719,6 ms** |
+| instâncias | 24 | **24 de 24 casadas** |
+| classes divergentes | 0 | **0** |
+
+Referência: o protótipo web fazia o mesmo trabalho em 279 ms. **90× mais rápido.**
+
+**A carga de ~720 ms é a única coisa que sobra como incômodo.** Não afeta o
+portão, mas é tempo de abertura do app. Entra no marco 2, junto com a câmera.
+
 ### US3 — duas divergências de borda
 
 Contagem exata (24 de 24) e nenhuma classe divergente, mas **22 casadas** ao

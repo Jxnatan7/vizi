@@ -51,6 +51,8 @@ export type BenchmarkOptions = {
   repetitions: number;
   warmupDiscard: number;
   confidenceThreshold: number;
+  /** Supressão não-máxima. 0,7 é o padrão do Ultralytics, que gerou a referência. */
+  iouThreshold: number;
 };
 
 /**

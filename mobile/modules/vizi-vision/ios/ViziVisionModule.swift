@@ -2,10 +2,16 @@ import ExpoModulesCore
 import Foundation
 
 /// Política da medição. Os valores vêm do TypeScript — princípio IV.
+///
+/// Os defaults existem só porque o protocolo `Record` exige um `init()`; o
+/// TypeScript sempre envia todos os campos. Mantidos em sincronia com
+/// `src/bench/runBenchmark.ts` para que uma divergência não passe despercebida
+/// se algum dia um campo deixar de ser enviado.
 struct BenchmarkOptions: Record {
   @Field var repetitions: Int = 100
-  @Field var warmupDiscard: Int = 5
+  @Field var warmupDiscard: Int = 25
   @Field var confidenceThreshold: Double = 0.25
+  @Field var iouThreshold: Double = 0.7
 }
 
 public class ViziVisionModule: Module {
@@ -43,6 +49,7 @@ public class ViziVisionModule: Module {
 
     AsyncFunction("runBenchmark") { (options: BenchmarkOptions) -> [String: Any] in
       let threshold = Float(options.confidenceThreshold)
+      let iou = Float(options.iouThreshold)
       let total = max(1, options.repetitions)
 
       var modelMs: [Double] = []
@@ -52,7 +59,7 @@ public class ViziVisionModule: Module {
 
       var lastInstances: [Instance] = []
       for _ in 0..<total {
-        let r = try self.engine.runOnce(confidenceThreshold: threshold)
+        let r = try self.engine.runOnce(confidenceThreshold: threshold, iouThreshold: iou)
         modelMs.append(r.modelMs)
         cycleMs.append(r.cycleMs)
         lastInstances = r.instances

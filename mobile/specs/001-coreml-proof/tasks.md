@@ -120,12 +120,12 @@ descobriria que o build quebra ao adicionar código nativo.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T034 [P] Registrar os números medidos em `specs/001-coreml-proof/research.md`, fechando R1–R5
-- [ ] T035 [P] Confirmar **SC-005**: percurso do zero ao app aberto em menos de 30 min, seguindo apenas o `quickstart.md`
-- [ ] T036 Auditar a fronteira: nenhum buffer acima de 64 KB atravessa para o JavaScript (princípio II)
-- [ ] T037 Auditar o Swift: nenhuma constante de política (princípio IV)
-- [ ] T038 Verificar **FR-009**: o app não acessa câmera, não desenha sobreposição e não rastreia
-- [ ] T039 Atualizar `mobile/README.md` com o estado do marco e o veredito
+- [x] T034 [P] Números registrados em `research.md` — R1, R3 e R5 fechados; R2 respondido pelo tempo
+- [~] T035 [P] **SC-005** não verificado de forma limpa: o percurso foi descoberto junto com o quickstart, então não houve execução do zero. Reavaliar no marco 2, que exige nova instalação
+- [x] T036 Fronteira auditada: `RawMeasurement` serializa em **4,2 KB**, 15× abaixo do limite. Frame (1,6 MB), detecção (1,2 MB) e protótipos (3,3 MB) não atravessam
+- [x] T037 Auditoria **reprovou e foi corrigida**: `iouThreshold` estava fixo em Swift e virou parâmetro; `warmupDiscard` tinha default defasado (5 contra 25 no TS)
+- [x] T038 **FR-009** verificado: nenhuma referência a AVFoundation, vision-camera, Skia, Reanimated ou tracker. A única ocorrência de 'overlay' é um comentário
+- [x] T039 `mobile/README.md` atualizado com o veredito e o que ficou aberto
 
 ---
 

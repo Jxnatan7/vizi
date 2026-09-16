@@ -22,7 +22,7 @@ enum Decode {
     confidenceThreshold: Float,
     inputWidth: Int,
     inputHeight: Int,
-    iouThreshold: Float = 0.7   // igual ao padrao do Ultralytics, que gerou a referencia
+    iouThreshold: Float   // sem default: e politica, e vem do TypeScript
   ) -> [Instance] {
     let shape = detections.shape.map { $0.intValue }
     guard shape.count == 3 else { return [] }

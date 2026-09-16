@@ -14,6 +14,7 @@ export const DEFAULT_OPTIONS: BenchmarkOptions = {
   repetitions: 100,
   warmupDiscard: 25,
   confidenceThreshold: 0.25,
+  iouThreshold: 0.7,
 };
 
 export async function runBenchmark(
