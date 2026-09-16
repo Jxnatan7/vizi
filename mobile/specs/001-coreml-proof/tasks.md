@@ -85,16 +85,16 @@ descobriria que o build quebra ao adicionar código nativo.
 
 - [x] T017 [P] [US2] Exportar o modelo no Colab conforme `quickstart.md` e commitar `mobile/models/vizi-seg.mlpackage/` — feito 15/09, `imgsz=640`, shapes em `models/vizi-seg.shapes.md`
 - [x] T018 [P] [US2] Adicionar `mobile/assets/reference.jpg` do conjunto de validação — feito, 640×640, idêntico à entrada do modelo
-- [ ] T019 [US2] Incluir modelo e imagem como recursos do bundle via config plugin em `mobile/app.config.js` — a pasta nativa não é versionada
-- [ ] T020 [US2] Implementar carga do modelo em `mobile/modules/vizi-vision/ios/InferenceEngine.swift` — resolve **R3**
-- [ ] T021 [US2] Implementar execução sobre a imagem embarcada, fora da thread de interface (princípio I)
-- [ ] T022 [US2] Implementar `Decode.swift` em `mobile/modules/vizi-vision/ios/`: saída crua → instâncias, com NMS
-- [ ] T023 [US2] Instrumentar latências: primeira execução isolada (**FR-004**), e execução do modelo separada do ciclo completo (**FR-014**)
-- [ ] T024 [P] [US2] Reportar condição térmica do aparelho (**FR-005**)
+- [x] T019 [US2] Incluir modelo e imagem como recursos do bundle via config plugin em `mobile/app.config.js` — a pasta nativa não é versionada — via `resource_bundles` no podspec, não manipulação do projeto Xcode
+- [x] T020 [US2] Implementar carga do modelo em `mobile/modules/vizi-vision/ios/InferenceEngine.swift` — resolve **R3** — `InferenceEngine.load()`; procura `.mlmodelc` e cai para compilar o `.mlpackage` com cache
+- [x] T021 [US2] Implementar execução sobre a imagem embarcada, fora da thread de interface (princípio I) — `AsyncFunction` do Expo roda fora da thread de interface
+- [x] T022 [US2] Implementar `Decode.swift` em `mobile/modules/vizi-vision/ios/`: saída crua → instâncias, com NMS — filtro por confiança antes de ordenar; saídas resolvidas por forma, não por nome
+- [x] T023 [US2] Instrumentar latências: primeira execução isolada (**FR-004**), e execução do modelo separada do ciclo completo (**FR-014**) — latências individuais; agregação em TypeScript
+- [x] T024 [P] [US2] Reportar condição térmica do aparelho (**FR-005**) — `ProcessInfo.thermalState`
 - [ ] T025 [US2] Detectar e reportar a unidade que executou o modelo, ou declarar indisponível (**FR-006**, **FR-015**) — resolve **R2**
-- [ ] T026 [P] [US2] Implementar `mobile/src/bench/stats.ts`: mediana, p95, mínimo
-- [ ] T027 [US2] Implementar `mobile/src/bench/runBenchmark.ts` com a política — repetições, descarte, limiar (princípio IV: nenhuma dessas constantes no Swift)
-- [ ] T028 [US2] Implementar `mobile/src/ui/BenchScreen.tsx`: botão, resultados e mensagem de erro legível na tela (**FR-008**)
+- [x] T026 [P] [US2] Implementar `mobile/src/bench/stats.ts`: mediana, p95, mínimo — `src/bench/stats.ts`, p95 com interpolação
+- [x] T027 [US2] Implementar `mobile/src/bench/runBenchmark.ts` com a política — repetições, descarte, limiar (princípio IV: nenhuma dessas constantes no Swift) — `src/bench/runBenchmark.ts`
+- [x] T028 [US2] Implementar `mobile/src/ui/BenchScreen.tsx`: botão, resultados e mensagem de erro legível na tela (**FR-008**) — `src/ui/BenchScreen.tsx`, com erro legível e aviso de bundle Debug
 - [ ] T029 [US2] Caracterizar o aquecimento: registrar as 20 primeiras latências e fixar o número de descarte — resolve **R5**
 - [ ] T030 [US2] 🚦 **Medir o portão**: 100 repetições, aparelho frio, e conferir **SC-001** (mediana < 30 ms) e **SC-002** (p95 < 40 ms)
 

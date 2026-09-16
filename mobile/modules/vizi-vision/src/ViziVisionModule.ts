@@ -1,18 +1,18 @@
 import { NativeModule, requireNativeModule } from 'expo';
 
-import type { NativeProbe } from './ViziVision.types';
+import type { BenchmarkOptions, ModelInfo, NativeProbe, RawMeasurement } from './ViziVision.types';
 
 declare class ViziVisionModule extends NativeModule<{}> {
-  /** Marco 1, US1: prova que o código nativo foi compilado e instalado. */
+  /** Prova que o código nativo foi compilado e instalado. US1. */
   probe(): NativeProbe;
 
-  // US2 (T020–T025) acrescenta aqui, conforme contracts/vizi-vision.md:
-  //   loadModel(assetName: string): Promise<ModelInfo>
-  //   runBenchmark(options: BenchmarkOptions): Promise<Measurement>
-  //   unloadModel(): Promise<void>
-  //
-  // Declarados só quando existirem do lado Swift: uma assinatura em TypeScript
-  // sem implementação nativa compila e falha em tempo de execução.
+  /** Carrega e, se necessário, compila o modelo. Caro na primeira vez. */
+  loadModel(): Promise<ModelInfo>;
+
+  /** Executa a série sobre a imagem embarcada. Devolve latências individuais. */
+  runBenchmark(options: BenchmarkOptions): Promise<RawMeasurement>;
+
+  unloadModel(): Promise<void>;
 }
 
 export default requireNativeModule<ViziVisionModule>('ViziVision');
