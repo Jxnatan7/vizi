@@ -63,10 +63,10 @@ descobriria que o build quebra ao adicionar código nativo.
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Validar `.github/workflows/ios.yml` numa execução real: `pod install`, `xcodebuild` sem assinatura, empacotar em `Payload/`, publicar o `.ipa` como artefato — resolve **R4**
-- [ ] T011 [US1] Instalar e validar a cadeia de ferramentas local de assinatura e instalação em Linux — resolve **R1**, o maior risco do marco
-- [ ] T012 [US1] Obter certificado e perfil de provisionamento com a conta Apple gratuita
-- [ ] T013 [US1] Assinar o artefato e instalar no iPhone por USB
+- [x] T010 [US1] Validar `.github/workflows/ios.yml` numa execução real —  gerou o `.ipa`; depois virou matriz Debug+Release: `pod install`, `xcodebuild` sem assinatura, empacotar em `Payload/`, publicar o `.ipa` como artefato — resolve **R4**
+- [x] T011 [US1] Instalar e validar a cadeia de ferramentas local de assinatura e instalação em Linux — **R1 resolvido**; AltServer-Linux fork NG + anisette da SideStore
+- [x] T012 [US1] Obter certificado e perfil de provisionamento com a conta Apple gratuita
+- [x] T013 [US1] Assinar o artefato e instalar no iPhone por USB — app aberto no aparelho
 - [ ] T014 [US1] Verificar **SC-004**: alterar texto em `mobile/App.tsx` e confirmar que aparece sem recompilar
 - [ ] T015 [US1] Verificar **SC-006**: re-assinar e reinstalar o mesmo artefato sem passar pelo CI
 - [ ] T016 [US1] Preencher as seções 🔬 de `specs/001-coreml-proof/quickstart.md` com o procedimento real

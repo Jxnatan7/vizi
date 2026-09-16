@@ -9,7 +9,56 @@ compatibilidade mente e o teste no aparelho é a verdade.
 
 ---
 
-## R1 — Obter certificado de assinatura em Linux com conta Apple gratuita
+## R1 — RESOLVIDO (15/09/2026)
+
+App instalado e aberto no iPhone 14 Plus, iOS 26. O maior risco do marco caiu.
+
+O caminho que funcionou: fork `jaakkopalvaila/AltServer-Linux` release
+`ng-2026-09-13`, com `ALTSERVER_ANISETTE_SERVER=https://ani.sidestore.io`.
+
+**As duas coisas que quase derrubaram:**
+
+1. **Todo servidor de anisette público padrão está morto.** O embutido no
+   AltServer e o do Sideloadly devolvem HTTP 502. O sintoma engana: o AltServer
+   tenta ler a página de erro como JSON e reclama de `Content-Type`, sem dizer
+   que o problema é o servidor de anisette.
+2. **A Apple bloqueia `com.apple.dt.Xcode` no header de client-info desde
+   setembro de 2026**, com HTTP 503. Isso quebrou AltServer, AltStore e
+   SideStore ao mesmo tempo. Só o fork NG contorna, trocando por
+   `com.apple.akd`. O upstream está quebrado.
+
+**Beco sem saída evitado:** `nyamisty/alt_anisette_server` roda Wine com iCloud
+para Windows e automatiza login por AutoHotkey — exige credenciais Apple
+próprias no container e não serve como servidor local trivial.
+
+### Achado colateral: Debug e Release não são intercambiáveis
+
+A inspeção do `.ipa` instalado mostrou `main.jsbundle` embutido e **nenhum
+`EXDevLauncher`**. O workflow compilava só em Release.
+
+Consequência: aquele build **não satisfaz o SC-004** — não há como alterar
+JavaScript e ver no aparelho sem recompilar, porque o JS está embutido e o dev
+client não existe no pacote.
+
+E o inverso também vale, e é mais perigoso: **um build Debug não serve para
+medir.** O Swift compila com `-Onone`, então `Decode.swift` roda sem otimização
+e o `cycleMs` sai inflado. Medir o portão (SC-001) em Debug produziria um
+número falso — e, por ser falso *para pior*, poderia reprovar o marco sem
+motivo.
+
+O workflow passou a compilar **os dois**, em matriz:
+
+| configuração | para quê |
+|---|---|
+| `Debug` | dev launcher + Metro; é o que permite iterar em JS (SC-004) |
+| `Release` | JS embutido, Swift otimizado; é o único válido para medir (SC-001) |
+
+Runners macOS são gratuitos em repositório público, então o custo é tempo de
+fila, não dinheiro.
+
+---
+
+## R1 — o registro original
 
 **Risco: o mais alto do marco.** Se não fechar, nada roda no aparelho e o
 projeto inteiro para.

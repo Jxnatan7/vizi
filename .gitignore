@@ -19,3 +19,16 @@ pnpm-debug.log*
 .idea
 .DS_Store
 *.sw?
+
+# Artefatos de build iOS baixados do CI
+*.ipa
+*.app
+
+# NUNCA versionar credenciais de assinatura.
+# AltServerData/Certificates/*.p12 contem a CHAVE PRIVADA do certificado de
+# desenvolvimento atrelado ao Apple ID. Este repositorio e publico.
+AltServerData/
+*.p12
+*.pem
+*.cer
+*.mobileprovision

@@ -21,6 +21,19 @@ jobs:
       run:
         working-directory: mobile
 
+    # Duas configuracoes, por motivos diferentes e incompativeis:
+    #
+    #   Debug   -> traz o dev launcher do expo-dev-client e carrega o JS do
+    #              Metro. E o unico que permite iterar em JavaScript sem
+    #              recompilar (SC-004). Swift compila com -Onone.
+    #   Release -> JS embutido, Swift otimizado. E o unico valido para MEDIR
+    #              (SC-001): em Debug o Decode.swift roda sem otimizacao e o
+    #              cycleMs sai inflado.
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -47,7 +60,7 @@ jobs:
           xcodebuild \
             -workspace ios/vizi.xcworkspace \
             -scheme vizi \
-            -configuration Release \
+            -configuration ${{ matrix.configuration }} \
             -sdk iphoneos \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
@@ -59,11 +72,11 @@ jobs:
       - name: Package .ipa
         run: |
           mkdir -p Payload
-          cp -r build/Build/Products/Release-iphoneos/vizi.app Payload/
-          zip -qry vizi-unsigned.ipa Payload
+          cp -r build/Build/Products/${{ matrix.configuration }}-iphoneos/vizi.app Payload/
+          zip -qry vizi-${{ matrix.configuration }}-unsigned.ipa Payload
 
       - uses: actions/upload-artifact@v4
         with:
-          name: vizi-unsigned-ipa
-          path: mobile/vizi-unsigned.ipa
+          name: vizi-${{ matrix.configuration }}-unsigned-ipa
+          path: mobile/vizi-${{ matrix.configuration }}-unsigned.ipa
           retention-days: 30
