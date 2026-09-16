@@ -32,6 +32,6 @@ export default {
       },
     },
 
-    plugins: ['expo-dev-client'],
+    plugins: ['expo-dev-client', './plugins/withViziAssets'],
   },
 };

@@ -5,19 +5,29 @@ import Foundation
 enum ModelAssets {
   enum AssetError: LocalizedError {
     case bundleMissing
-    case modelMissing
-    case imageMissing(String)
+    case modelMissing(contents: [String])
+    case imageMissing(String, contents: [String])
 
     var errorDescription: String? {
       switch self {
       case .bundleMissing:
         return "ViziVisionAssets.bundle não foi encontrado no app. O resource_bundles do podspec não entrou no build."
-      case .modelMissing:
-        return "Nem vizi-seg.mlmodelc nem vizi-seg.mlpackage foram encontrados no bundle de recursos."
-      case .imageMissing(let name):
-        return "Imagem de referência '\(name)' não encontrada no bundle de recursos."
+      case .modelMissing(let contents):
+        return "Nem vizi-seg.mlmodelc nem vizi-seg.mlpackage no bundle. Conteúdo: \(describe(contents))"
+      case .imageMissing(let name, let contents):
+        return "Imagem '\(name).jpg' não está no bundle. Conteúdo: \(describe(contents))"
       }
     }
+  }
+
+  /// O que o bundle realmente contém. Sem console no aparelho, esta lista é a
+  /// única forma de distinguir "o recurso não foi copiado" de "o nome mudou".
+  private static func contents(of bundle: Bundle) -> [String] {
+    (try? FileManager.default.contentsOfDirectory(atPath: bundle.bundlePath)) ?? []
+  }
+
+  private static func describe(_ items: [String]) -> String {
+    items.isEmpty ? "(vazio)" : items.sorted().joined(separator: ", ")
   }
 
   static func assetsBundle() throws -> Bundle {
@@ -38,12 +48,18 @@ enum ModelAssets {
   static func compiledModelURL() throws -> (url: URL, compiledAtRuntime: Bool) {
     let bundle = try assetsBundle()
 
-    if let precompiled = bundle.url(forResource: "vizi-seg", withExtension: "mlmodelc") {
+    // O Xcode pode ter compilado o .mlpackage durante o build; se compilou,
+    // não há o que fazer em tempo de execução.
+    if let precompiled = bundle.url(forResource: "vizi-seg", withExtension: "mlmodelc")
+      ?? Bundle.main.url(forResource: "vizi-seg", withExtension: "mlmodelc") {
       return (precompiled, false)
     }
 
-    guard let package = bundle.url(forResource: "vizi-seg", withExtension: "mlpackage") else {
-      throw AssetError.modelMissing
+    guard let package = bundle.url(forResource: "vizi-seg", withExtension: "mlpackage")
+      // Se o CocoaPods copiar para o bundle principal em vez do sub-bundle.
+      ?? Bundle.main.url(forResource: "vizi-seg", withExtension: "mlpackage")
+    else {
+      throw AssetError.modelMissing(contents: contents(of: bundle))
     }
 
     let caches = try FileManager.default.url(
@@ -62,8 +78,10 @@ enum ModelAssets {
 
   static func referenceImageURL(_ name: String = "reference") throws -> URL {
     let bundle = try assetsBundle()
-    guard let url = bundle.url(forResource: name, withExtension: "jpg") else {
-      throw AssetError.imageMissing(name)
+    guard let url = bundle.url(forResource: name, withExtension: "jpg")
+      ?? Bundle.main.url(forResource: name, withExtension: "jpg")
+    else {
+      throw AssetError.imageMissing(name, contents: contents(of: bundle))
     }
     return url
   }

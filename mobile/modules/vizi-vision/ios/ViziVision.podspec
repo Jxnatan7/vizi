@@ -15,16 +15,18 @@ Pod::Spec.new do |s|
 
   s.source_files = "**/*.{h,m,mm,swift,hpp,cpp}"
 
-  # Modelo e imagem de referencia entram no app por aqui, e nao por manipulacao
-  # do projeto Xcode: a pasta ios/ e regenerada pelo prebuild a cada build, e
-  # qualquer alteracao feita nela some.
+  # Modelo e imagem de referencia sao copiados para ./Resources/ pelo config
+  # plugin withViziAssets, que roda antes do pod install.
   #
-  # O Xcode pode compilar o .mlpackage para .mlmodelc durante o build, ou nao.
-  # O lado Swift procura os dois (ver ModelAssets.swift).
+  # Caminhos EXPLICITOS, nao glob: 'Resources/**/*' entraria dentro do
+  # .mlpackage e achataria a estrutura de pastas que o Core ML exige.
+  #
+  # Tentativa anterior com '../../../models/...' produziu um bundle vazio: o
+  # CocoaPods nao resolve caminhos fora da raiz do pod, e nao avisa.
   s.resource_bundles = {
     'ViziVisionAssets' => [
-      '../../../models/vizi-seg.mlpackage',
-      '../../../assets/reference.jpg'
+      'Resources/vizi-seg.mlpackage',
+      'Resources/reference.jpg'
     ]
   }
 end

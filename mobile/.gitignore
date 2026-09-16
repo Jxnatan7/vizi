@@ -31,3 +31,6 @@ models/*.mlmodelc/
 # Ambiente
 .env
 .env.local
+
+# Gerado pelo config plugin withViziAssets a cada prebuild
+modules/vizi-vision/ios/Resources/
