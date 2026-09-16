@@ -50,8 +50,8 @@ Caminhos relativos a `mobile/`.
 - [x] T009 [US1] Aplicar `boxWidth` em pixels de imagem, não de tela — a view muda de tamanho, o espaço do modelo não — espessura em pixels de imagem, escalada pela view
 - [x] T010 [US1] Cor determinística pela posição quantizada do centro — resolve **R11**; cor por índice piscaria a cada frame — cor por posição quantizada — **R11 resolvida**
 - [x] T011 [US1] Respeitar `minConfidence` do estilo, separado do limiar de detecção — `minConfidence` separado do limiar de detecção
-- [ ] T012 [US1] 🚦 Verificar **SC-004**: as caixas caem sobre os objetos, sem deslocamento sistemático
-- [ ] T013 [US1] 🚦 **Olhar se o overlay parece fluido** — a observação que decide o futuro do marco 4. Aparelho na mão, em movimento
+- [x] T012 [US1] 🚦 **SC-004 confirmado**: caixas nos lugares exatos, cores distintas entre vizinhos
+- [x] T013 [US1] 🚦 **Fluido o tempo todo, na mão.** O marco 4 deixa de ser necessário para fluidez — ver `research.md`
 
 **Checkpoint**: o resultado da inferência virou imagem. Primeira vez no projeto.
 
@@ -63,12 +63,12 @@ Caminhos relativos a `mobile/`.
 
 **Independent Test**: a silhueta segue a lombada do livro, não o retângulo.
 
-- [ ] T014 [US2] Criar `MaskCompose.swift`: `cblas_sgemm` de `[N,32] × [32,25600]` — resolve **R10**
-- [ ] T015 [US2] Aplicar sigmoide e limiar, produzindo a silhueta por instância
-- [ ] T016 [US2] Recortar cada máscara à sua caixa (**FR-005**) — fora da caixa, a resposta do protótipo é ruído
-- [ ] T017 [US2] Compor as instâncias num único bitmap 160×160 RGBA, desempate por confiança — resolve **R13**
-- [ ] T018 [US2] Publicar o bitmap como `CGImage` na camada de máscara, com ampliação linear até 640
-- [ ] T019 [US2] Aplicar `maskOpacity` e a paleta do estilo
+- [x] T014 [US2] Criar `MaskCompose.swift`: `cblas_sgemm` de `[N,32] × [32,25600]` — resolve **R10** — `cblas_sgemm`, memória reaproveitada entre frames
+- [x] T015 [US2] Aplicar sigmoide e limiar, produzindo a silhueta por instância — limiar em `logit > 0`, equivalente a `sigmoid > 0.5`, sem 600 mil exponenciais
+- [x] T016 [US2] Recortar cada máscara à sua caixa (**FR-005**) — fora da caixa, a resposta do protótipo é ruído — recorte à caixa; fora dela o protótipo é ruído
+- [x] T017 [US2] Compor as instâncias num único bitmap 160×160 RGBA, desempate por confiança — resolve **R13** — desempate por confiança, escrita em ordem crescente — **R13 resolvida**
+- [x] T018 [US2] Publicar o bitmap como `CGImage` na camada de máscara, com ampliação linear até 640 — `CGImage` 160×160 na camada, ampliação linear pelo compositor
+- [x] T019 [US2] Aplicar `maskOpacity` e a paleta do estilo — opacidade e paleta do estilo
 - [ ] T020 [US2] 🚦 Verificar **SC-005**: a silhueta segue o objeto e se distingue da caixa
 
 **Checkpoint**: o app segmenta. É o marco que a arquitetura chamava de 5.
@@ -77,8 +77,8 @@ Caminhos relativos a `mobile/`.
 
 ## Phase 5: User Story 3 - Saber quanto o desenho custa (Priority: P3)
 
-- [ ] T021 [US3] Cronometrar composição e desenho como estágios próprios na telemetria (**FR-006**)
-- [ ] T022 [US3] Garantir que o overlay mantém o último resultado quando uma inferência falha (**FR-009**)
+- [x] T021 [US3] Cronometrar composição e desenho como estágios próprios na telemetria (**FR-006**) — `drawMs` já na telemetria desde o diagnóstico do overlay
+- [x] T022 [US3] Garantir que o overlay mantém o último resultado quando uma inferência falha (**FR-009**) — o `ResultStore` mantém o último resultado; o overlay nunca apaga
 - [ ] T023 [US3] 🚦 Três sessões na mesma cena — sem overlay, só caixas, caixas e máscaras — **em Release**
 - [ ] T024 [US3] Conferir **SC-001** (60 fps mantidos) e **SC-002** (e2e não mais que 15% acima dos 39,6 ms)
 
@@ -91,7 +91,7 @@ Caminhos relativos a `mobile/`.
 - [ ] T025 [P] Registrar as medições em `research.md`, fechando R10–R13
 - [ ] T026 Auditar a fronteira: nenhum pixel de máscara atravessa; o estilo é dado, não código
 - [ ] T027 Auditar o Swift: nenhuma constante de aparência fora do `OverlayStyle`
-- [ ] T028 Decidir o futuro do marco 4 a partir do T013, e registrar na arquitetura
+- [x] T028 Decidir o futuro do marco 4 a partir do T013, e registrar na arquitetura — **marco 4 descartado** por decisão do autor em 16/09. Um rastreador simples pode voltar depois, se a cor piscando incomodar
 - [ ] T029 Atualizar `mobile/README.md`
 
 ---

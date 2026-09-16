@@ -81,6 +81,7 @@ final class OverlayRenderer {
   /// O pool cresce até o máximo de instâncias já visto e não encolhe: camadas
   /// ocultas não custam nada, e realocar a cada frame custaria.
   private var boxPool: [CAShapeLayer] = []
+  private let masks = MaskCompose()
 
   init() {
     maskLayer.magnificationFilter = .linear
@@ -127,11 +128,37 @@ final class OverlayRenderer {
     // arrasto em vez de acompanhamento.
     CATransaction.begin()
     CATransaction.setDisableActions(true)
+    drawMasks(visible, protos: snapshot.protos)
     drawBoxes(visible)
     CATransaction.commit()
 
     lastDrawnCount = visible.count
     lastDrawMs = (CFAbsoluteTimeGetCurrent() - started) * 1000
+  }
+
+  // MARK: - Máscaras
+
+  private func drawMasks(_ instances: [Instance], protos: MLMultiArray?) {
+    guard style.showMasks, let protos, !instances.isEmpty else {
+      maskLayer.contents = nil
+      return
+    }
+    // A composição acontece em 160×160; a ampliação até a tela é do
+    // compositor, de graça.
+    maskLayer.contents = masks.compose(
+      instances: instances,
+      protos: protos,
+      imageSide: Int(imageSide),
+      colorFor: { [weak self] in self?.rgb(for: $0) ?? (255, 255, 255) },
+      opacity: Double(style.maskOpacity))
+  }
+
+  private func rgb(for inst: Instance) -> (UInt8, UInt8, UInt8) {
+    guard let comps = color(for: inst).components, comps.count >= 3 else {
+      return (255, 255, 255)
+    }
+    let byte = { (v: CGFloat) in UInt8(max(0, min(1, v)) * 255) }
+    return (byte(comps[0]), byte(comps[1]), byte(comps[2]))
   }
 
   // MARK: - Caixas

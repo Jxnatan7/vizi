@@ -2,6 +2,81 @@
 
 ---
 
+## MEDIÇÃO — caixas, Release, 16/09/2026
+
+`medicoes/2026-09-16-caixas-release.json` — 100 s, 5998 de 5999 frames.
+
+| | marco 2 | agora | |
+|---|---|---|---|
+| fps processados | 60,00 | **60,00** | mantido |
+| ponta-a-ponta | 39,63 ms | **36,28 ms** | −8% |
+| transformação | 1,50 ms | 1,43 ms | |
+| inferência | 6,50 ms | 6,50 ms | |
+| decodificação | 3,48 ms | **0,10 ms** | |
+| desenho | — | **0,30 ms** | |
+| trabalho/frame | 11,48 ms | **8,03 ms** | folga de 8,64 ms |
+
+Térmico `nominal` o tempo todo, bateria 80% → 80% em 100 s.
+
+### Três leituras
+
+**1. A hipótese do Debug se confirmou exatamente.** A decodificação caiu de
+3,48 para **0,10 ms** — os ~35× previstos. Era `-Onone` num laço sobre 8400
+âncoras, e nada mais.
+
+**2. A hipótese sobre a inferência caiu.** `inferMs` ficou em **6,50 ms nos
+dois builds**. Os 2,1× contra os 3,1 ms do marco 1 **não eram artefato de
+build** — são reais e persistem em Release.
+
+A diferença entre os dois contextos: o marco 1 media 100 execuções em laço
+fechado sobre **um único buffer reutilizado**; aqui cada frame traz um buffer
+diferente de um pool, e a inferência divide o aparelho com a transformação
+(Core Image sobre Metal) e com a composição do preview.
+
+**Hipótese não verificada:** contenção de GPU entre a transformação e o
+caminho do Core ML. Testável desligando a transformação e alimentando o modelo
+com um buffer fixo durante a sessão ao vivo. Fica registrado como pergunta
+aberta — **não vale otimizar sem saber**, e 6,5 ms cabem folgados no orçamento.
+
+**3. O desenho é praticamente gratuito.** 0,30 ms, e num `CADisplayLink` na
+thread principal — **não consome o orçamento do frame**. O e2e até caiu, porque
+a decodificação otimizada compensou com sobra.
+
+### Portão do marco
+
+| | | |
+|---|---|---|
+| SC-001 · 60 fps mantidos | ✅ | 60,00 |
+| SC-002 · e2e +15% máx | ✅ | **caiu** 8% |
+| SC-003 · custo do desenho reportado | ✅ | 0,30 ms |
+| SC-004 · caixas sobre os objetos | ✅ | confirmado visualmente |
+| SC-005 · máscaras | ⬜ | fase 4, não implementada |
+
+---
+
+## 🚦 T013 — o overlay é fluido. O marco 4 encolhe.
+
+Observado com o aparelho na mão, em movimento: **fluido o tempo todo**, caixas
+coladas nos objetos, cores estáveis entre vizinhos.
+
+Isto responde a decisão adiada da spec. A arquitetura previa, no marco 4,
+rastreador, filtro de Kalman e compensação de movimento — tudo para **tornar
+convincente o intervalo entre detecções**. A 60 fps esse intervalo é de um
+frame, e não há o que disfarçar.
+
+**O marco 4 deixa de ser necessário para fluidez.** O que sobra dele:
+
+- **identidade estável** — hoje a cor vem da posição e troca ao cruzar célula
+  (R11). Um rastreador daria id estável e cor fixa por objeto.
+- **rede de segurança térmica** — se a cadência cair, a predição volta a fazer
+  falta. Mas isso é o marco 6, e só se a medição mostrar queda.
+
+A recomendação é **não construir o marco 4 como estava**, e reavaliar depois das
+máscaras: se a cor piscando incomodar, um rastreador simples resolve — sem
+Kalman, sem compensação de movimento.
+
+---
+
 ## R10 — Custo de compor as máscaras
 
 **A conta.** Máscara = coeficientes × protótipos. Para N instâncias:
