@@ -134,6 +134,15 @@ export default function BenchScreen() {
             <Row c={c} label="pior IoU" value={comparison.worstIoU.toFixed(4)} />
             <Row c={c} label="desvio máx. do centro" value={`${comparison.maxCenterDeltaPx.toFixed(2)} px`} />
             <Row c={c} label="classes divergentes" value={String(comparison.classMismatches)} />
+            <Row
+              c={c}
+              label="IoU das não casadas"
+              value={
+                comparison.unmatchedIoUs.length
+                  ? comparison.unmatchedIoUs.map((v) => v.toFixed(3)).join(', ')
+                  : '—'
+              }
+            />
           </Card>
         )}
 

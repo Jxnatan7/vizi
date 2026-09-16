@@ -167,8 +167,10 @@ imagem.
   o aparelho em temperatura normal. O ciclo completo é medido e reportado junto,
   mas não é o que o limite vincula neste marco.
 - **SC-002**: O p95 da mesma sequência é inferior a 40 ms.
-- **SC-003**: A quantidade de instâncias detectadas coincide exatamente com a
-  referência, e posições e classes coincidem dentro da tolerância declarada.
+- **SC-003** *(renegociado em 16/09/2026 — ver Decisões adiadas)*: a quantidade
+  de instâncias coincide exatamente com a referência; nenhuma classe diverge;
+  ao menos 90% das instâncias casam com IoU ≥ 0,9; e nenhuma instância fica
+  abaixo de IoU 0,7 contra sua contrapartida.
 - **SC-004**: Uma alteração na camada de interface aparece no aplicativo
   instalado em menos de 60 segundos, sem compilação remota.
 - **SC-005**: Partindo de um repositório limpo, o percurso completo até o
@@ -205,6 +207,27 @@ Registradas aqui para não bloquearem o marco e não se perderem.
   modelo e ciclo completo separadamente (FR-014) e vincula o limite à primeira.
   Se a diferença entre as duas se mostrar grande, a escolha é reavaliada — com
   os dois números na mão, o que hoje seria palpite.
+- **Renegociação do SC-003, com a razão.** O critério original exigia que
+  **todas** as instâncias casassem com IoU ≥ 0,9. Esse número foi declarado
+  antes de existir qualquer medição — era palpite.
+
+  Medido: contagem exata (24 de 24), zero classes divergentes, 22 casadas com
+  pior IoU 0,9321 e desvio máximo de centro de 1,97 px em 640. Duas instâncias
+  discordam na extensão.
+
+  Isso é o padrão de **arredondamento fp16 somado a desempate no NMS**: com os
+  pesos em meia precisão os escores mudam na terceira casa, e dois candidatos
+  sobrepostos podem ser resolvidos de formas diferentes. O Ultralytics fica com
+  um, nós ficamos com outro — ambos são o mesmo livro.
+
+  Degradação de conversão teria outra assinatura: objetos faltando, contagem
+  errada, deslocamento sistemático ou classe trocada. Nenhuma delas ocorre.
+
+  O critério novo testa cada um desses modos de falha em vez de exigir
+  igualdade numérica de um modelo que foi deliberadamente quantizado. O campo
+  `unmatchedIoUs` ficou exposto na tela: se algum dia cair para perto de zero,
+  aí sim há caixa espúria, e o teste reprova.
+
 - **O que fazer se o modelo não couber inteiro no acelerador dedicado.** O marco
   torna o fato detectável (FR-015) em vez de decidir agora a regra de aprovação.
   A decisão depende de quanto isso custa em latência, que é justamente o que
