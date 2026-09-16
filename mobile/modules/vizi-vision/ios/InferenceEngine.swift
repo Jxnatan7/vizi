@@ -159,7 +159,9 @@ final class InferenceEngine {
     let instances = Decode.instances(
       from: detections,
       maskCoeffCount: maskCoeffCount,
-      confidenceThreshold: confidenceThreshold)
+      confidenceThreshold: confidenceThreshold,
+      inputWidth: inputWidth,
+      inputHeight: inputHeight)
 
     return RunResult(
       modelMs: modelMs,

@@ -20,6 +20,8 @@ enum Decode {
     from detections: MLMultiArray,
     maskCoeffCount: Int,
     confidenceThreshold: Float,
+    inputWidth: Int,
+    inputHeight: Int,
     iouThreshold: Float = 0.7   // igual ao padrao do Ultralytics, que gerou a referencia
   ) -> [Instance] {
     let shape = detections.shape.map { $0.intValue }
@@ -51,9 +53,19 @@ enum Decode {
 
         let cx = p[a], cy = p[anchors + a]
         let w = p[2 * anchors + a], h = p[3 * anchors + a]
+
+        // Recorte aos limites da imagem, como o Ultralytics faz.
+        // Sem isto, objetos na borda produzem caixas com x negativo ou que
+        // passam da largura — e um overlay as desenharia fora da tela.
+        let x1 = max(0, cx - w / 2)
+        let y1 = max(0, cy - h / 2)
+        let x2 = min(Float(inputWidth), cx + w / 2)
+        let y2 = min(Float(inputHeight), cy + h / 2)
+        guard x2 > x1, y2 > y1 else { continue }
+
         kept.append(Instance(
           classIndex: best, score: bestScore,
-          x: cx - w / 2, y: cy - h / 2, width: w, height: h))
+          x: x1, y: y1, width: x2 - x1, height: y2 - y1))
       }
     }
 

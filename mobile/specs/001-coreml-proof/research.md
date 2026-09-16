@@ -194,6 +194,39 @@ Duas conclusões:
 2. **O p95 de 5,5 ms estava medindo a cauda do aquecimento, não variância.**
    Com o descarte correto ele deve cair bastante.
 
+### Medição 2 — 16/09/2026, com warmupDiscard corrigido
+
+| | medição 1 | medição 2 | |
+|---|---|---|---|
+| mediana | 3,2 ms | **3,1 ms** | ruído |
+| p95 | 5,5 ms | **4,9 ms** | ✅ confirma a hipótese do aquecimento |
+| primeira execução | 33,2 ms | 15,8 ms | varia com o estado do sistema |
+| carga do modelo | 875 ms | 826 ms | |
+| instâncias | 20 | **24** | ✅ IoU corrigido para 0,7 |
+
+O p95 caiu ao descartar 25 em vez de 5: era cauda de aquecimento, não variância.
+
+### US3 — duas divergências de borda
+
+Contagem exata (24 de 24) e nenhuma classe divergente, mas **22 casadas** ao
+critério de IoU ≥ 0,9. Pior IoU casado 0,9321; desvio máximo de centro 1,97 px.
+
+As duas que não casaram estão nas bordas da imagem:
+
+```
+#1    x = -0    y = 350   w = 40   h = 49
+#20   x = 631   y = 367   w = 10   h = 69     (631 + 10 = 641 > 640)
+```
+
+**Causa: o Ultralytics recorta as caixas aos limites da imagem, e o
+`Decode.swift` não recortava.** Objetos cortados pela borda produziam caixas
+com origem negativa ou extremidade além da largura — geometria diferente da
+referência para o mesmo objeto.
+
+Não é problema só de teste: um overlay desenharia essas caixas fora da tela.
+Corrigido com recorte a `[0, largura] × [0, altura]`, e candidatos degenerados
+(área nula após o recorte) são descartados.
+
 ### Achado para a US3
 
 O app detectou **20 instâncias**; `reference-expected.json` tem **24**.
