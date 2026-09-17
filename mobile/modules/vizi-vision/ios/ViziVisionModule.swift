@@ -177,7 +177,7 @@ public class ViziVisionModule: Module {
         // As detecções da FOTO substituem as do último frame ao vivo. As
         // coordenadas são comparáveis: as duas passaram pela mesma
         // transformação para 640×640.
-        self.coordinator.results.override(instances: result.instances, protos: result.protos)
+        self.coordinator.results.publishOverriding(instances: result.instances, protos: result.protos)
 
         return [
           "count": result.instances.count,

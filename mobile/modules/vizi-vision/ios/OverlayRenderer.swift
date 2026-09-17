@@ -53,7 +53,10 @@ final class ResultStore {
 
   /// Escrita explícita, que ignora a pausa. É como o resultado da foto
   /// substitui as detecções ao vivo.
-  func override(instances: [Instance], protos: MLMultiArray?) {
+  ///
+  /// Não se chama `override` porque essa é palavra reservada do Swift — o
+  /// compilador a lê como modificador de declaração.
+  func publishOverriding(instances: [Instance], protos: MLMultiArray?) {
     lock.lock()
     self.instances = instances
     self.protos = protos
