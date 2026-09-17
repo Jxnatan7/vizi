@@ -95,6 +95,12 @@ final class PreviewSink {
   var style = OverlayStyle() { didSet { configure() } }
   var active = false { didSet { configure() } }
 
+  /// Congela a tela no instante do toque, antes de qualquer reconfiguração.
+  ///
+  /// Não limpa nada: a última imagem enfileirada continua visível. É o que
+  /// permite a animação começar imediatamente, sem esperar a foto (FR-009).
+  var frozen = false
+
   /// Diagnóstico: sem console no aparelho, saber se o overlay está ligado e
   /// quantas instâncias ele desenhou é a diferença entre ver e adivinhar.
   var isAttached: Bool { view != nil }
@@ -102,6 +108,7 @@ final class PreviewSink {
   var lastDrawnCount: Int { view?.overlay.lastDrawnCount ?? -1 }
 
   func push(_ buffer: CVPixelBuffer) {
+    guard !frozen else { return }
     view?.enqueue(buffer)
   }
 

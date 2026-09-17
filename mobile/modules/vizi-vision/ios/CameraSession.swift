@@ -40,6 +40,8 @@ final class CameraSession: NSObject {
 
   private let session = AVCaptureSession()
   private let output = AVCaptureVideoDataOutput()
+  private let photo = PhotoCapture()
+  private var device: AVCaptureDevice?
   /// Fila dedicada: a entrega de frames nunca toca a thread de interface.
   private let queue = DispatchQueue(label: "com.jxnatan7.vizi.camera", qos: .userInitiated)
 
@@ -114,6 +116,8 @@ final class CameraSession: NSObject {
       throw CameraError.cannotAddOutput
     }
     session.addOutput(output)
+    try photo.attach(to: session)
+    self.device = device
 
     // Orientação — R9. Sem isto o buffer chega deitado com o aparelho em
     // retrato, e o modelo vê a cena de lado: degradação silenciosa.
@@ -143,6 +147,12 @@ final class CameraSession: NSObject {
   }
 
   var isRunning: Bool { session.isRunning }
+
+  /// Foto em resolução máxima. Troca o formato, captura, e restaura.
+  func capturePhoto() async throws -> (buffer: CVPixelBuffer, elapsedMs: Double) {
+    guard let device else { throw CameraError.noDevice }
+    return try await photo.capture(device: device)
+  }
 }
 
 extension CameraSession: AVCaptureVideoDataOutputSampleBufferDelegate {

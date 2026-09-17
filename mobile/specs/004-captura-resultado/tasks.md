@@ -19,9 +19,9 @@ Caminhos relativos a `mobile/`.
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Criar `src/capture/options.ts` com `CaptureOptions` — margem, limiares e duração da animação (princípio IV)
-- [ ] T002 [P] Acrescentar `CaptureOptions`, `CaptureResult` e `HistoryEntry` aos tipos do módulo
-- [ ] T003 Botão de captura na `CameraScreen`, ainda sem ação
+- [x] T001 [P] Criar `src/capture/options.ts` com `CaptureOptions` — margem, limiares e duração da animação (princípio IV) — `src/capture/options.ts`; limiares de geometria são palpites até a T024
+- [x] T002 [P] Acrescentar `CaptureOptions`, `CaptureResult` e `HistoryEntry` aos tipos do módulo — `CaptureOptions` e `CaptureResult` tipados
+- [x] T003 Botão de captura na `CameraScreen`, ainda sem ação — botão de captura, com estado de carregamento
 
 ---
 
@@ -31,9 +31,9 @@ Caminhos relativos a `mobile/`.
 
 **⚠️ CRITICAL**: se a sessão não retomar a 60 fps, todo o resto é inútil — o app passa a degradar a cada captura.
 
-- [ ] T004 Criar `modules/vizi-vision/ios/PhotoCapture.swift`: `AVCapturePhotoOutput`, troca de formato, captura, restauração — resolve **R17**
-- [ ] T005 Congelar a última imagem ao vivo no instante do toque, antes de qualquer reconfiguração
-- [ ] T006 Expor `capture` e `dismissResult` no módulo, com erro legível
+- [x] T004 Criar `modules/vizi-vision/ios/PhotoCapture.swift`: `AVCapturePhotoOutput`, troca de formato, captura, restauração — resolve **R17** — troca de formato, captura sem compressão, restauração garantida por `defer`
+- [x] T005 Congelar a última imagem ao vivo no instante do toque, antes de qualquer reconfiguração — `PreviewSink.frozen`: para de enfileirar e a última imagem permanece
+- [x] T006 Expor `capture` e `dismissResult` no módulo, com erro legível — `capture` e `dismissResult` no módulo, com erro legível
 - [ ] T007 🚦 Medir a ida e volta da troca de formato e confirmar que a câmera retoma a **60 fps** (**SC-005**)
 
 **Checkpoint**: dá para tirar uma foto e voltar, sem degradar a sessão.
@@ -46,10 +46,10 @@ Caminhos relativos a `mobile/`.
 
 **Independent Test**: apontar, apertar, conferir se o número bate com a estante.
 
-- [ ] T008 [US1] Inferir sobre a foto — **uma vez, sem ladrilhar** (FR-004)
+- [x] T008 [US1] Inferir sobre a foto — **uma vez, sem ladrilhar** (FR-004) — uma inferência, pela **mesma** transformação do caminho ao vivo
 - [ ] T009 [US1] Recortar à união das caixas com a margem do estilo (FR-007)
 - [ ] T010 [US1] Estado de resultado na `PreviewView`, ainda sem endireitar nem animar
-- [ ] T011 [US1] Cromo do resultado em React: contagem, voltar (FR-012)
+- [x] T011 [US1] Cromo do resultado em React: contagem, voltar (FR-012) — contagem, tamanho da foto, tempo e motivo da recusa
 - [ ] T012 [US1] Caso sem objetos: informar, em vez de mostrar faixa vazia
 - [ ] T013 [US1] 🚦 Verificar **SC-004**: contagem da foto dentro de ±10% da contagem ao vivo na mesma cena
 

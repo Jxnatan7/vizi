@@ -116,6 +116,22 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
 
   var isRunning: Bool { camera.isRunning }
 
+  func capturePhoto() async throws -> (buffer: CVPixelBuffer, elapsedMs: Double) {
+    try await camera.capturePhoto()
+  }
+
+  /// A foto passa pela MESMA transformação do caminho ao vivo.
+  ///
+  /// Não é economia de código: se a foto fosse transformada de outro jeito, a
+  /// contagem dela não seria comparável com a contagem ao vivo — e o SC-004
+  /// compara exatamente isso.
+  func squareFromPhoto(_ buffer: CVPixelBuffer, side: Int) throws -> CVPixelBuffer {
+    guard let square = transform.transform(buffer, mode: mode, side: side) else {
+      throw InferenceEngine.EngineError.imageDecode
+    }
+    return square
+  }
+
   // MARK: - Amostragem
 
   private func startTimer(intervalMs: Int) {

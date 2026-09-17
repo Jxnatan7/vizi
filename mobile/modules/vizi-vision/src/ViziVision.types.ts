@@ -178,3 +178,33 @@ export type OverlayStyle = {
   /** Cores "#RRGGBB". A atribuição por objeto é do nativo. */
   palette: string[];
 };
+
+// ---------------------------------------------------------------------------
+// Marco 4 — captura e resultado
+// ---------------------------------------------------------------------------
+
+export type CaptureOptions = {
+  cropMargin: number;
+  minInstancesForGeometry: number;
+  minGeometryConfidence: number;
+  transitionMs: number;
+};
+
+export type CaptureResult = {
+  count: number;
+  straightened: boolean;
+  /** Texto legível quando a correção foi recusada — FR-011. */
+  declineReason: string;
+  geometryConfidence: number;
+  /** Posições das divisões, normalizadas de 0 a 1. */
+  dividers: number[];
+  /**
+   * **Identificador, não pixels.** A foto em resolução máxima fica no nativo;
+   * atravessar a fronteira com ela violaria o princípio II num caso em que
+   * seria tentador — é só uma imagem, e é só uma vez.
+   */
+  imageId: string;
+  elapsedMs: number;
+  photoWidth: number;
+  photoHeight: number;
+};

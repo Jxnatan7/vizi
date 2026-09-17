@@ -17,6 +17,14 @@ struct BenchmarkOptions: Record {
 
 /// Política da sessão de câmera. Também vem do TypeScript — princípio IV.
 /// Aparência do overlay. O nativo executa; o TypeScript decide (FR-010).
+/// Política da captura. Vem do TypeScript — princípio IV.
+struct CaptureOptions: Record {
+  @Field var cropMargin: Double = 0.05
+  @Field var minInstancesForGeometry: Int = 5
+  @Field var minGeometryConfidence: Double = 0.6
+  @Field var transitionMs: Int = 600
+}
+
 struct OverlayStyleRecord: Record {
   @Field var showBoxes: Bool = true
   @Field var showMasks: Bool = true
@@ -145,6 +153,44 @@ public class ViziVisionModule: Module {
 
     AsyncFunction("setTransform") { (transform: String) in
       self.coordinator.mode = TransformMode(rawValue: transform) ?? .stretch
+    }
+
+    // MARK: - Captura (marco 4)
+
+    AsyncFunction("capture") { (options: CaptureOptions) -> [String: Any] in
+      // Congela ANTES de qualquer reconfiguração: a tela precisa segurar a
+      // última imagem enquanto o formato é trocado (FR-009).
+      PreviewSink.shared.frozen = true
+
+      do {
+        let shot = try await self.coordinator.capturePhoto()
+        let side = self.engine.inputWidth
+        let square = try self.coordinator.squareFromPhoto(shot.buffer, side: side)
+        let result = try self.engine.run(
+          on: square,
+          confidenceThreshold: 0.25,
+          iouThreshold: 0.7)
+
+        return [
+          "count": result.instances.count,
+          // Endireitamento entra na fase 4 (T014–T019).
+          "straightened": false,
+          "declineReason": "endireitamento ainda não implementado",
+          "geometryConfidence": 0.0,
+          "dividers": [Double](),
+          "imageId": UUID().uuidString,
+          "elapsedMs": shot.elapsedMs,
+          "photoWidth": CVPixelBufferGetWidth(shot.buffer),
+          "photoHeight": CVPixelBufferGetHeight(shot.buffer),
+        ]
+      } catch {
+        PreviewSink.shared.frozen = false
+        throw error
+      }
+    }
+
+    AsyncFunction("dismissResult") {
+      PreviewSink.shared.frozen = false
     }
 
     AsyncFunction("setOverlayStyle") { (record: OverlayStyleRecord) in

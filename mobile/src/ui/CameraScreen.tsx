@@ -3,6 +3,7 @@ import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useColorSc
 import { StatusBar } from 'expo-status-bar';
 
 import { PreviewView, type TransformMode } from '../../modules/vizi-vision';
+import { useCapture } from '../capture/useCapture';
 import { useSession } from '../camera/useSession';
 import { copySessionToClipboard, evaluateGate } from '../telemetry/exportSession';
 import { Button, Card, Row } from './parts';
@@ -19,6 +20,7 @@ export default function CameraScreen() {
   const c = dark ? colors.dark : colors.light;
   const { info, sample, session, error, transform, overlay, start, stop, setTransform, setOverlay } = useSession();
   const [copied, setCopied] = useState(false);
+  const { state, result, error: captureError, capture, dismiss } = useCapture();
   const verdicts = useMemo(() => (session ? evaluateGate(session) : []), [session]);
 
   return (
@@ -90,6 +92,30 @@ export default function CameraScreen() {
             </Pressable>
           ))}
         </View>
+
+        {info && state !== 'result' && (
+          <Button c={c} onPress={capture} disabled={state === 'capturing'}
+            title={state === 'capturing' ? 'Capturando…' : 'Capturar'} />
+        )}
+
+        {state === 'result' && result && (
+          <Card c={c} border={c.ok} label="RESULTADO">
+            <Row c={c} label="livros" value={String(result.count)} strong />
+            <Row c={c} label="foto" value={`${result.photoWidth}×${result.photoHeight}`} />
+            <Row c={c} label="tempo" value={`${result.elapsedMs.toFixed(0)} ms`} strong />
+            <Row c={c} label="endireitado" value={result.straightened ? 'sim' : `não — ${result.declineReason}`} />
+          </Card>
+        )}
+
+        {state === 'result' && (
+          <Button c={c} onPress={dismiss} disabled={false} title="Voltar à câmera" />
+        )}
+
+        {captureError && (
+          <Card c={c} border={c.crit} label="ERRO NA CAPTURA">
+            <Text style={{ color: c.ink, fontFamily: 'Menlo', fontSize: 13 }}>{captureError}</Text>
+          </Card>
+        )}
 
         <Button c={c} onPress={info ? stop : start} disabled={false}
           title={info ? 'Parar sessão' : 'Iniciar sessão'} />
