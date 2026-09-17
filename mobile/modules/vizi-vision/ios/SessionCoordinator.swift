@@ -44,6 +44,10 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
 
   /// Sem as condições iniciais, uma sessão não é comparável com outra. O
   /// protótipo web mediu 20% de variação no mesmo modelo só por temperatura.
+  /// Instantes em que houve captura. Sem isto, a queda de fps aparece na
+  /// telemetria sem causa atribuível.
+  private var captureMarks: [Double] = []
+
   private var thermalAtStart = "unknown"
   private var batteryAtStart: Double = -1
 
@@ -65,6 +69,7 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
              confidenceThreshold: Float, iouThreshold: Float) throws -> [String: Any] {
     gate.reset()
     telemetry.reset()
+    captureMarks.removeAll()
     self.mode = mode
     self.confidenceThreshold = confidenceThreshold
     self.iouThreshold = iouThreshold
@@ -110,6 +115,7 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
       "batteryAtEnd": Self.batteryLevel(),
       "samples": snap.samples,
       "thermalTransitions": snap.transitions,
+      "captureMarks": captureMarks,
       "truncated": snap.truncated,
     ]
   }
@@ -117,7 +123,10 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
   var isRunning: Bool { camera.isRunning }
 
   func capturePhoto() async throws -> (buffer: CVPixelBuffer, elapsedMs: Double) {
-    try await camera.capturePhoto()
+    statsLock.lock()
+    captureMarks.append(Date().timeIntervalSince(startedAt) * 1000)
+    statsLock.unlock()
+    return try await camera.capturePhoto()
   }
 
   /// A foto passa pela MESMA transformação do caminho ao vivo.

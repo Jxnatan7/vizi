@@ -160,7 +160,10 @@ public class ViziVisionModule: Module {
     AsyncFunction("capture") { (options: CaptureOptions) -> [String: Any] in
       // Congela ANTES de qualquer reconfiguração: a tela precisa segurar a
       // última imagem enquanto o formato é trocado (FR-009).
+      // Congela imagem E overlay juntos. Separá-los mostraria caixas de um
+      // frame sobre a imagem de outro.
       PreviewSink.shared.frozen = true
+      self.coordinator.results.setPaused(true)
 
       do {
         let shot = try await self.coordinator.capturePhoto()
@@ -170,6 +173,11 @@ public class ViziVisionModule: Module {
           on: square,
           confidenceThreshold: 0.25,
           iouThreshold: 0.7)
+
+        // As detecções da FOTO substituem as do último frame ao vivo. As
+        // coordenadas são comparáveis: as duas passaram pela mesma
+        // transformação para 640×640.
+        self.coordinator.results.override(instances: result.instances, protos: result.protos)
 
         return [
           "count": result.instances.count,
@@ -185,11 +193,13 @@ public class ViziVisionModule: Module {
         ]
       } catch {
         PreviewSink.shared.frozen = false
+        self.coordinator.results.setPaused(false)
         throw error
       }
     }
 
     AsyncFunction("dismissResult") {
+      self.coordinator.results.setPaused(false)
       PreviewSink.shared.frozen = false
     }
 

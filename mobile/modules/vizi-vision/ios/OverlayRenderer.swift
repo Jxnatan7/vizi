@@ -34,11 +34,36 @@ final class ResultStore {
   private var protos: MLMultiArray?
   private var generation: UInt64 = 0
 
+  /// Enquanto pausado, o pipeline ao vivo não sobrescreve o que está exibido.
+  ///
+  /// Sem isto, congelar a imagem deixava o overlay solto: caixas de um frame
+  /// desenhadas sobre a imagem de outro, que não correspondem ao que está
+  /// embaixo.
+  private var paused = false
+
   func publish(instances: [Instance], protos: MLMultiArray?) {
+    lock.lock()
+    if !paused {
+      self.instances = instances
+      self.protos = protos
+      generation &+= 1
+    }
+    lock.unlock()
+  }
+
+  /// Escrita explícita, que ignora a pausa. É como o resultado da foto
+  /// substitui as detecções ao vivo.
+  func override(instances: [Instance], protos: MLMultiArray?) {
     lock.lock()
     self.instances = instances
     self.protos = protos
     generation &+= 1
+    lock.unlock()
+  }
+
+  func setPaused(_ value: Bool) {
+    lock.lock()
+    paused = value
     lock.unlock()
   }
 

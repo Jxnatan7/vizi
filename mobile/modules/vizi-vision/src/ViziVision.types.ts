@@ -158,6 +158,8 @@ export type Session = {
   batteryAtEnd: number;
   samples: TelemetrySample[];
   thermalTransitions: ThermalTransition[];
+  /** Milissegundos de cada captura, para correlacionar quedas de taxa. */
+  captureMarks: number[];
   /** true = amostras antigas foram descartadas pelo buffer circular. */
   truncated: boolean;
 };

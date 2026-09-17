@@ -34,7 +34,7 @@ Caminhos relativos a `mobile/`.
 - [x] T004 Criar `modules/vizi-vision/ios/PhotoCapture.swift`: `AVCapturePhotoOutput`, troca de formato, captura, restauração — resolve **R17** — troca de formato, captura sem compressão, restauração garantida por `defer`
 - [x] T005 Congelar a última imagem ao vivo no instante do toque, antes de qualquer reconfiguração — `PreviewSink.frozen`: para de enfileirar e a última imagem permanece
 - [x] T006 Expor `capture` e `dismissResult` no módulo, com erro legível — `capture` e `dismissResult` no módulo, com erro legível
-- [ ] T007 🚦 Medir a ida e volta da troca de formato e confirmar que a câmera retoma a **60 fps** (**SC-005**)
+- [x] T007 🚦 Medir a ida e volta da troca de formato e confirmar que a câmera retoma a **60 fps** (**SC-005**) — **passou**: queda para ~50 fps durante a captura, recuperação completa a 60 fps em seguida, sustentada por 36 s
 
 **Checkpoint**: dá para tirar uma foto e voltar, sem degradar a sessão.
 
