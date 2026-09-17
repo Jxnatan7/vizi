@@ -177,6 +177,9 @@ public class ViziVisionModule: Module {
         // As detecções da FOTO substituem as do último frame ao vivo. As
         // coordenadas são comparáveis: as duas passaram pela mesma
         // transformação para 640×640.
+        // A imagem canônica da foto substitui o frame congelado. A partir
+        // daqui há UMA imagem na tela, e as detecções são dela.
+        PreviewSink.shared.showStill(square)
         self.coordinator.results.publishOverriding(instances: result.instances, protos: result.protos)
 
         return [

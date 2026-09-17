@@ -119,8 +119,16 @@ final class CameraSession: NSObject {
     try photo.attach(to: session)
     self.device = device
 
-    // Orientação — R9. Sem isto o buffer chega deitado com o aparelho em
-    // retrato, e o modelo vê a cena de lado: degradação silenciosa.
+    // Orientação — R9.
+    //
+    // **Redundante desde a reestruturação de 17/09.** O `FrameTransform`
+    // normaliza a orientação olhando as dimensões do buffer, então a cena sai
+    // em pé mesmo sem isto. Mantido porque entrega o buffer já em retrato e
+    // poupa uma rotação por frame no caminho ao vivo.
+    //
+    // O que NÃO se deve fazer é voltar a depender disto para alinhar detecção
+    // com imagem: a conexão de foto é outra e não obedece a mesma configuração.
+    // Foi exatamente essa dependência que produziu detecções giradas 90°.
     if let connection = output.connection(with: .video) {
       if #available(iOS 17.0, *) {
         if connection.isVideoRotationAngleSupported(90) {

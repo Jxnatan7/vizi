@@ -68,10 +68,31 @@ final class FrameTransform {
             == kCVReturnSuccess,
           let destination else { return nil }
 
-    let srcW = CGFloat(CVPixelBufferGetWidth(source))
-    let srcH = CGFloat(CVPixelBufferGetHeight(source))
-    let target = CGFloat(side)
+    // ── Normalização de orientação ────────────────────────────────────────
+    //
+    // Tudo vira retrato ANTES de qualquer outra coisa, olhando as dimensões do
+    // próprio buffer.
+    //
+    // Por que aqui e não na conexão da câmera: a saída de vídeo e a de foto têm
+    // conexões independentes, cada uma com sua rotação. Depender das duas
+    // concordarem é alinhamento por coincidência — e elas discordaram, o que
+    // produziu detecções giradas 90° em relação à imagem.
+    //
+    // Aqui é autocorretivo: qualquer fonte, em qualquer orientação, sai no
+    // mesmo espaço canônico.
     var image = CIImage(cvPixelBuffer: source)
+    if image.extent.width > image.extent.height {
+      // `.right` é a orientação de uma foto tirada com o aparelho em pé.
+      // Se a imagem sair de cabeça para baixo, a correção é `.left`.
+      image = image.oriented(.right)
+    }
+    // A rotação desloca a extensão; reancorar na origem.
+    image = image.transformed(by: CGAffineTransform(
+      translationX: -image.extent.minX, y: -image.extent.minY))
+
+    let srcW = image.extent.width
+    let srcH = image.extent.height
+    let target = CGFloat(side)
 
     switch mode {
     case .stretch:

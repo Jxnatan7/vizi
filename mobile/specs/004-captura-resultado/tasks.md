@@ -48,7 +48,7 @@ Caminhos relativos a `mobile/`.
 
 - [x] T008 [US1] Inferir sobre a foto — **uma vez, sem ladrilhar** (FR-004) — uma inferência, pela **mesma** transformação do caminho ao vivo
 - [ ] T009 [US1] Recortar à união das caixas com a margem do estilo (FR-007)
-- [ ] T010 [US1] Estado de resultado na `PreviewView`, ainda sem endireitar nem animar
+- [x] T010 [US1] Estado de resultado na `PreviewView`, ainda sem endireitar nem animar — estado de resultado exibindo a imagem canônica da foto
 - [x] T011 [US1] Cromo do resultado em React: contagem, voltar (FR-012) — contagem, tamanho da foto, tempo e motivo da recusa
 - [ ] T012 [US1] Caso sem objetos: informar, em vez de mostrar faixa vazia
 - [ ] T013 [US1] 🚦 Verificar **SC-004**: contagem da foto dentro de ±10% da contagem ao vivo na mesma cena
@@ -86,7 +86,7 @@ Caminhos relativos a `mobile/`.
 - [ ] T025 [US3] Decompor a homografia em `CATransform3D` — resolve **R16**
 - [ ] T026 [US3] Animar do estado ao vivo ao resultado: recorte, aproximação e endireitamento
 - [ ] T027 [US3] Começar a animação **no toque**, com o frame congelado (**FR-009**)
-- [ ] T028 [US3] Substituir pelo frame de alta resolução sem salto (**FR-010**)
+- [x] T028 [US3] Substituir pelo frame de alta resolução sem salto (**FR-010**) — ; virou pré-requisito de coerência, não refinamento
 - [ ] T029 [US3] Animar a volta, em `dismissResult`
 - [ ] T030 [US3] 🚦 Verificar **SC-001** (< 1,5 s) e **SC-002** (60 fps na transição)
 

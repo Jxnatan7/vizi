@@ -4,6 +4,44 @@ Quatro incógnitas. A R15 é a que decide se o marco entrega algo confiável.
 
 ---
 
+## REESTRUTURAÇÃO — espaço canônico, 17/09/2026
+
+**O sintoma.** A foto saía em 4032×3024 (paisagem), o frame de vídeo em
+768×1024 (retrato). Esticados para 640×640, produziam deformações **opostas** de
+cenas **giradas 90°** entre si. As detecções da foto desenhadas sobre o frame de
+vídeo não podiam coincidir.
+
+**A causa raiz não era a rotação.** Era o alinhamento depender de **duas
+configurações independentes concordarem**: `videoRotationAngle` na conexão de
+vídeo e na conexão de foto. Uma pegou, a outra não. Mesmo se as duas tivessem
+pegado, o alinhamento seria coincidência, não garantia.
+
+**A correção.** Um espaço canônico, e tudo converte para ele explicitamente:
+
+```
+fonte (vídeo OU foto, qualquer orientação e resolução)
+   ↓  normalizar para retrato    ← no nosso código, olhando as dimensões
+   ↓  transformar para 640×640   ← a transformação escolhida
+CANÔNICO — o que o modelo vê É o que a tela mostra
+```
+
+A normalização vive no `FrameTransform` e olha o próprio buffer: largura maior
+que altura, gira. **Autocorretiva** — some a classe inteira de bug "as duas
+conexões discordam".
+
+**E o segundo defeito, que não era bug.** As detecções vinham da foto e a
+imagem exibida era o frame de vídeo congelado: duas imagens na tela. Isso era a
+T028 não construída, e as peças tinham sido implementadas numa ordem que produz
+um estado intermediário incoerente. `PreviewSink.showStill` passou a exibir a
+imagem canônica da foto, e a T028 deixou de ser refinamento para virar
+pré-requisito de coerência.
+
+**O que ficou redundante.** A rotação na conexão de vídeo. Mantida porque poupa
+uma rotação por frame no caminho ao vivo — mas **nada mais deve depender dela**
+para alinhar detecção com imagem.
+
+---
+
 ## R14 — Geometria da estante a partir das máscaras
 
 **Por que não das caixas.** Uma caixa alinhada aos eixos é idêntica para um

@@ -112,6 +112,15 @@ final class PreviewSink {
     view?.enqueue(buffer)
   }
 
+  /// Exibe uma imagem parada, ignorando o congelamento.
+  ///
+  /// É como a imagem canônica da foto substitui o frame de vídeo congelado.
+  /// Sem isto, as detecções da foto ficavam desenhadas sobre a imagem de outro
+  /// momento — duas imagens na tela ao mesmo tempo.
+  func showStill(_ buffer: CVPixelBuffer) {
+    view?.enqueue(buffer)
+  }
+
   private func configure() {
     guard Thread.isMainThread else {
       DispatchQueue.main.async { [weak self] in self?.configure() }
