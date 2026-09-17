@@ -104,6 +104,7 @@ final class PhotoCapture: NSObject {
 
     return (buffer, (CFAbsoluteTimeGetCurrent() - started) * 1000)
   }
+}
 
 extension PhotoCapture: AVCapturePhotoCaptureDelegate {
   func photoOutput(
