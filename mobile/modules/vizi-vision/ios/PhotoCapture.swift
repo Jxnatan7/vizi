@@ -52,16 +52,6 @@ final class PhotoCapture: NSObject {
     let started = CFAbsoluteTimeGetCurrent()
     let originalFormat = device.activeFormat
 
-    if let photoFormat = bestPhotoFormat(for: device),
-       photoFormat != originalFormat,
-       let maxDimensions = photoFormat.supportedMaxPhotoDimensions
-         .max(by: { Int($0.width) * Int($0.height) < Int($1.width) * Int($1.height) }) {
-      try device.lockForConfiguration()
-      device.activeFormat = photoFormat
-      device.unlockForConfiguration()
-      output.maxPhotoDimensions = maxDimensions
-    }
-
     // Restaura o formato ao vivo aconteça o que acontecer: sair daqui com o
     // formato de foto ativo degradaria a sessão para sempre.
     defer {
@@ -70,14 +60,42 @@ final class PhotoCapture: NSObject {
       device.unlockForConfiguration()
     }
 
-    guard let pixelFormat = output.availablePhotoPixelFormatTypes.first(where: {
-      $0 == kCVPixelFormatType_32BGRA
-    }) else { throw PhotoError.noUncompressedFormat }
+    if let photoFormat = bestPhotoFormat(for: device), photoFormat != originalFormat {
+      try device.lockForConfiguration()
+      device.activeFormat = photoFormat
+      device.unlockForConfiguration()
+    }
 
+    // Sempre, e não só quando o formato troca: sem isto a captura sem
+    // compressão sai no menor tamanho que o formato oferece — foi o que
+    // produziu os 192×144.
+    guard let dimensions = device.activeFormat.supportedMaxPhotoDimensions
+      .max(by: { Int($0.width) * Int($0.height) < Int($1.width) * Int($1.height) })
+    else { throw PhotoError.outputUnavailable }
+    output.maxPhotoDimensions = dimensions
+
+    // A conexão da foto é OUTRA, e não herda a rotação da conexão de vídeo.
+    // Sem isto a foto chega deitada, o modelo vê os livros de lado, e as
+    // caixas saem giradas 90° em relação à imagem.
+    if let connection = output.connection(with: .video) {
+      if #available(iOS 17.0, *), connection.isVideoRotationAngleSupported(90) {
+        connection.videoRotationAngle = 90
+      }
+    }
+
+    guard output.availablePhotoPixelFormatTypes.contains(kCVPixelFormatType_32BGRA) else {
+      throw PhotoError.noUncompressedFormat
+    }
+
+    // As dimensões vão explícitas no pedido. Deixar implícito foi o que deu
+    // errado antes.
     let settings = AVCapturePhotoSettings(format: [
-      kCVPixelBufferPixelFormatTypeKey as String: pixelFormat
+      kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+      kCVPixelBufferWidthKey as String: Int(dimensions.width),
+      kCVPixelBufferHeightKey as String: Int(dimensions.height),
     ])
     settings.photoQualityPrioritization = .quality
+    settings.maxPhotoDimensions = dimensions
 
     let buffer = try await withCheckedThrowingContinuation { (c: CheckedContinuation<CVPixelBuffer, Error>) in
       continuation = c
@@ -86,7 +104,6 @@ final class PhotoCapture: NSObject {
 
     return (buffer, (CFAbsoluteTimeGetCurrent() - started) * 1000)
   }
-}
 
 extension PhotoCapture: AVCapturePhotoCaptureDelegate {
   func photoOutput(

@@ -190,6 +190,7 @@ public class ViziVisionModule: Module {
           "elapsedMs": shot.elapsedMs,
           "photoWidth": CVPixelBufferGetWidth(shot.buffer),
           "photoHeight": CVPixelBufferGetHeight(shot.buffer),
+          "instances": result.instances.count,
         ]
       } catch {
         PreviewSink.shared.frozen = false
