@@ -69,7 +69,7 @@ Caminhos relativos a `mobile/`.
 - [x] T017 [US2] Compor as instâncias num único bitmap 160×160 RGBA, desempate por confiança — resolve **R13** — desempate por confiança, escrita em ordem crescente — **R13 resolvida**
 - [x] T018 [US2] Publicar o bitmap como `CGImage` na camada de máscara, com ampliação linear até 640 — `CGImage` 160×160 na camada, ampliação linear pelo compositor
 - [x] T019 [US2] Aplicar `maskOpacity` e a paleta do estilo — opacidade e paleta do estilo
-- [ ] T020 [US2] 🚦 Verificar **SC-005**: a silhueta segue o objeto e se distingue da caixa
+- [x] T020 [US2] 🚦 Verificar **SC-005**: a silhueta segue o objeto e se distingue da caixa — **SC-005 confirmado**: a silhueta segue o objeto
 
 **Checkpoint**: o app segmenta. É o marco que a arquitetura chamava de 5.
 
@@ -79,8 +79,8 @@ Caminhos relativos a `mobile/`.
 
 - [x] T021 [US3] Cronometrar composição e desenho como estágios próprios na telemetria (**FR-006**) — `drawMs` já na telemetria desde o diagnóstico do overlay
 - [x] T022 [US3] Garantir que o overlay mantém o último resultado quando uma inferência falha (**FR-009**) — o `ResultStore` mantém o último resultado; o overlay nunca apaga
-- [ ] T023 [US3] 🚦 Três sessões na mesma cena — sem overlay, só caixas, caixas e máscaras — **em Release**
-- [ ] T024 [US3] Conferir **SC-001** (60 fps mantidos) e **SC-002** (e2e não mais que 15% acima dos 39,6 ms)
+- [x] T023 [US3] 🚦 Três sessões na mesma cena — sem overlay, só caixas, caixas e máscaras — **em Release** — três configurações comparadas em Release
+- [x] T024 [US3] Conferir **SC-001** (60 fps mantidos) e **SC-002** (e2e não mais que 15% acima dos 39,6 ms) — **SC-001 e SC-002 atingidos**: 60 fps, e2e 36,43 ms (abaixo da linha de base)
 
 **Checkpoint**: o custo do desenho é conhecido, não presumido.
 
@@ -88,7 +88,7 @@ Caminhos relativos a `mobile/`.
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T025 [P] Registrar as medições em `research.md`, fechando R10–R13
+- [x] T025 [P] Registrar as medições em `research.md`, fechando R10–R13 — medições registradas; **R10 a R13 fechadas**
 - [ ] T026 Auditar a fronteira: nenhum pixel de máscara atravessa; o estilo é dado, não código
 - [ ] T027 Auditar o Swift: nenhuma constante de aparência fora do `OverlayStyle`
 - [x] T028 Decidir o futuro do marco 4 a partir do T013, e registrar na arquitetura — **marco 4 descartado** por decisão do autor em 16/09. Um rastreador simples pode voltar depois, se a cor piscando incomodar

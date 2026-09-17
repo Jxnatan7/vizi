@@ -77,6 +77,53 @@ Kalman, sem compensação de movimento.
 
 ---
 
+## MEDIÇÃO FINAL — caixas e máscaras, Release, 17/09/2026 ✅ PORTÃO ATINGIDO
+
+`medicoes/2026-09-17-mascaras-release.json` — 31 s, **1842 de 1842 frames**.
+
+| | sem overlay | só caixas | caixas + máscaras |
+|---|---|---|---|
+| fps processados | 60,00 | 60,00 | **60,00** |
+| ponta-a-ponta | 39,63 ms | 36,28 ms | **36,43 ms** |
+| desenho | — | 0,30 ms | **2,02 ms** |
+| trabalho/frame | 11,48 ms* | 8,03 ms | **8,22 ms** |
+
+\* em Debug; os demais em Release.
+
+**As máscaras custam ~1,7 ms de desenho** — e o desenho roda no `CADisplayLink`,
+na thread principal, **fora do orçamento do frame**. O trabalho da fila da
+câmera praticamente não mudou: 8,03 → 8,22 ms.
+
+Térmico `nominal` do início ao fim, bateria 55% → 55%, fps 60,0 → 60,0.
+
+**A escolha do Accelerate se justificou.** Metal não foi necessário: compor na
+resolução dos protótipos e deixar o compositor ampliar resolveu, como a R10
+previa. A rota Metal fica disponível e não foi paga.
+
+### Portão
+
+| | | |
+|---|---|---|
+| SC-001 · 60 fps mantidos | ✅ | 60,00, 1842 de 1842 frames |
+| SC-002 · e2e +15% máx | ✅ | 36,43 ms, **abaixo** da linha de base |
+| SC-003 · custo do desenho reportado | ✅ | 2,02 ms |
+| SC-004 · caixas sobre os objetos | ✅ | confirmado |
+| SC-005 · máscaras seguem a silhueta | ✅ | confirmado |
+| SC-006 · alternância consistente | ✅ | |
+
+### Duas observações para os próximos marcos
+
+**`instanceCount` chegou a 104.** A mediana é 20, mas houve cena com mais de
+cem instâncias, e o `drawMs` subiu a 4,71 ms nesses momentos. O custo do desenho
+escala com a contagem — hoje sobra folga, mas é o primeiro lugar onde um limite
+de instâncias desenhadas faria falta.
+
+**A inferência subiu de 6,55 para 7,18 ms** entre o início e o fim dos 31
+segundos. Está dentro da tolerância, mas é a primeira vez que o número sobe.
+Sessão longa diria se é tendência ou ruído.
+
+---
+
 ## R10 — Custo de compor as máscaras
 
 **A conta.** Máscara = coeficientes × protótipos. Para N instâncias:
