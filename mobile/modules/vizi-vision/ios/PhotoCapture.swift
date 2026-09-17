@@ -29,7 +29,19 @@ final class PhotoCapture: NSObject {
   }
 
   private let output = AVCapturePhotoOutput()
+
+  /// Protege a continuation: o callback do AVFoundation chega em fila própria,
+  /// e retomar duas vezes a mesma continuation derruba o app.
+  private let lock = NSLock()
   private var continuation: CheckedContinuation<CVPixelBuffer, Error>?
+
+  private func finish(_ result: Result<CVPixelBuffer, Error>) {
+    lock.lock()
+    let c = continuation
+    continuation = nil
+    lock.unlock()
+    c?.resume(with: result)
+  }
 
   /// Adicionada na configuração da sessão, não na captura: adicionar saída com
   /// a sessão rodando causa outra reconfiguração, e já há uma no caminho.
@@ -52,31 +64,32 @@ final class PhotoCapture: NSObject {
     let started = CFAbsoluteTimeGetCurrent()
     let originalFormat = device.activeFormat
 
+    // `unlockForConfiguration` sem um lock bem-sucedido derruba o app. O `try?`
+    // anterior engolia a falha do lock e seguia mexendo no device assim mesmo.
+    func withDeviceLock(_ body: (AVCaptureDevice) -> Void) -> Bool {
+      guard (try? device.lockForConfiguration()) != nil else { return false }
+      body(device)
+      device.unlockForConfiguration()
+      return true
+    }
+
     // Restaura o formato ao vivo aconteça o que acontecer: sair daqui com o
     // formato de foto ativo degradaria a sessão para sempre.
-    defer {
-      try? device.lockForConfiguration()
-      device.activeFormat = originalFormat
-      device.unlockForConfiguration()
-    }
+    defer { _ = withDeviceLock { $0.activeFormat = originalFormat } }
 
     if let photoFormat = bestPhotoFormat(for: device), photoFormat != originalFormat {
-      try device.lockForConfiguration()
-      device.activeFormat = photoFormat
-      device.unlockForConfiguration()
+      guard withDeviceLock({ $0.activeFormat = photoFormat }) else {
+        throw PhotoError.failed("não foi possível travar a câmera para trocar de formato")
+      }
     }
 
-    // Sempre, e não só quando o formato troca: sem isto a captura sem
-    // compressão sai no menor tamanho que o formato oferece — foi o que
-    // produziu os 192×144.
     guard let dimensions = device.activeFormat.supportedMaxPhotoDimensions
       .max(by: { Int($0.width) * Int($0.height) < Int($1.width) * Int($1.height) })
     else { throw PhotoError.outputUnavailable }
     output.maxPhotoDimensions = dimensions
 
     // A conexão da foto é OUTRA, e não herda a rotação da conexão de vídeo.
-    // Sem isto a foto chega deitada, o modelo vê os livros de lado, e as
-    // caixas saem giradas 90° em relação à imagem.
+    // Sem isto a foto chega deitada e as caixas saem giradas 90°.
     if let connection = output.connection(with: .video) {
       if #available(iOS 17.0, *), connection.isVideoRotationAngleSupported(90) {
         connection.videoRotationAngle = 90
@@ -87,18 +100,19 @@ final class PhotoCapture: NSObject {
       throw PhotoError.noUncompressedFormat
     }
 
-    // As dimensões vão explícitas no pedido. Deixar implícito foi o que deu
-    // errado antes.
+    // Apenas o formato de pixel no dicionário. Acrescentar largura e altura
+    // aqui faz o AVFoundation lançar exceção — o tamanho se define por
+    // `maxPhotoDimensions`, não por estas chaves.
     let settings = AVCapturePhotoSettings(format: [
-      kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-      kCVPixelBufferWidthKey as String: Int(dimensions.width),
-      kCVPixelBufferHeightKey as String: Int(dimensions.height),
+      kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
     ])
     settings.photoQualityPrioritization = .quality
     settings.maxPhotoDimensions = dimensions
 
     let buffer = try await withCheckedThrowingContinuation { (c: CheckedContinuation<CVPixelBuffer, Error>) in
+      lock.lock()
       continuation = c
+      lock.unlock()
       output.capturePhoto(with: settings, delegate: self)
     }
 
@@ -112,17 +126,14 @@ extension PhotoCapture: AVCapturePhotoCaptureDelegate {
     didFinishProcessingPhoto photo: AVCapturePhoto,
     error: Error?
   ) {
-    let c = continuation
-    continuation = nil
-
     if let error {
-      c?.resume(throwing: PhotoError.failed(error.localizedDescription))
+      finish(.failure(PhotoError.failed(error.localizedDescription)))
       return
     }
     guard let buffer = photo.pixelBuffer else {
-      c?.resume(throwing: PhotoError.noPixelBuffer)
+      finish(.failure(PhotoError.noPixelBuffer))
       return
     }
-    c?.resume(returning: buffer)
+    finish(.success(buffer))
   }
 }
