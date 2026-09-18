@@ -203,10 +203,10 @@ enum ShelfGeometry {
     // A reta das bases encontra o horizonte exatamente no ponto de fuga
     // horizontal. Com o horizonte da gravidade, o erro perpendicular a ele é
     // descartado por construção — um grau de liberdade a menos.
-    let baseLine: Projective.H = (lowest.slope, -1, lowest.intercept)
+    let lowestRowLine: Projective.H = (lowest.slope, -1, lowest.intercept)
     let horizontalVP: Projective.H
     if let horizon = horizonLine {
-      let inter = Projective.cross(baseLine, horizon)
+      let inter = Projective.cross(lowestRowLine, horizon)
       horizontalVP = abs(inter.w) > 1e-9 ? inter : (1, lowest.slope, 0)
     } else {
       horizontalVP = (1, lowest.slope, 0)
@@ -272,12 +272,14 @@ enum ShelfGeometry {
                       declineReason: "O quadrilátero estimado não faz sentido")
     }
 
-    // A fileira com mais livros dá a reta de base mais confiável.
-    let best = usable.max { $0.indices.count < $1.indices.count }
-    let baseLine: Projective.H? = best.map { ($0.slope, -1, $0.intercept) }
+    // A fileira com MAIS LIVROS dá a reta mais confiável para exportar — que
+    // não é necessariamente a mais baixa, usada acima para fechar o
+    // quadrilátero.
+    let mostPopulated = usable.max { $0.indices.count < $1.indices.count }
+    let exportedBaseLine: Projective.H? = mostPopulated.map { ($0.slope, -1, $0.intercept) }
 
     return Estimate(quad: quad, confidence: confidence, rows: rows, lying: lyingIdx,
-                    usedGravity: usedGravity, bestBaseLine: baseLine, declineReason: nil)
+                    usedGravity: usedGravity, bestBaseLine: exportedBaseLine, declineReason: nil)
   }
 
   /// Eixo médio das lombadas, normalizado.
