@@ -253,14 +253,43 @@ public class ViziVisionModule: Module {
           let fPortrait = halfFov > 1e-6
             ? Double(max(portrait.extent.width, portrait.extent.height)) / 2 / tan(halfFov)
             : Double(max(portrait.extent.width, portrait.extent.height))
+
           if let g = gravity {
-            if let found = AzimuthSearch.search(
-              portrait: portrait, gravity: g,
-              fieldOfViewDegrees: self.coordinator.fieldOfView,
-              context: self.ciContext) {
+            let horizonPortrait = Projective.horizon(
+              gravity: g,
+              focal: Projective.Focal(x: fPortrait, y: fPortrait),
+              center: CGPoint(x: portrait.extent.width / 2, y: portrait.extent.height / 2))
+
+            // ── Horizontal: bases dos livros, PROJETADAS no horizonte ──────
+            //
+            // A primeira tentativa usou as bases sem horizonte confiável,
+            // porque a vertical vinha do PCA. Agora a vertical vem da
+            // gravidade e o horizonte está provado correto — o cruzamento das
+            // duas informações é o que faltava.
+            if let baseCanonical = estimate.bestBaseLine {
+              // A reta está em coordenadas canônicas; converter para retrato.
+              // Uma reta transforma pela INVERSA transposta da escala.
+              let basePortrait: Projective.H = (baseCanonical.x / Double(kx),
+                                                baseCanonical.y / Double(ky),
+                                                baseCanonical.w)
+              let vp = Projective.cross(basePortrait, horizonPortrait)
+              let scale = max(abs(vp.x), abs(vp.y))
+              if scale > 1e-9 {
+                horizontalVP = vp
+                // Confiança: o quanto a base e o horizonte se cruzam de forma
+                // bem determinada. Quase paralelos dão um ponto instável.
+                azimuthConfidence = min(1, abs(vp.w) / scale * 1000)
+              }
+            }
+
+            // A busca por gradientes fica só como diagnóstico: o teste no
+            // aparelho mostrou que ela erra em cenas frontais.
+            if options.diagnostics,
+               let found = AzimuthSearch.search(
+                 portrait: portrait, gravity: g,
+                 fieldOfViewDegrees: self.coordinator.fieldOfView,
+                 context: self.ciContext) {
               azimuthScores = found.scores
-              azimuthConfidence = found.confidence
-              if found.confidence >= 0.15 { horizontalVP = found.vanishingPoint }
             }
 
             if !region.isEmpty,
@@ -277,14 +306,9 @@ public class ViziVisionModule: Module {
               if options.diagnostics {
                 // Sobre a foto CRUA: horizonte, pontos de fuga, recorte e a
                 // curva. Uma captura passa a dizer qual etapa falhou.
-                let horizon = Projective.horizon(
-                  gravity: g,
-                  focal: Projective.Focal(x: fPortrait, y: fPortrait),
-                  center: CGPoint(x: portrait.extent.width / 2,
-                                  y: portrait.extent.height / 2))
                 if let diag = Diagnostics.draw(
                   portrait: portrait, context: self.ciContext,
-                  horizon: horizon, verticalVP: out.verticalVP,
+                  horizon: horizonPortrait, verticalVP: out.verticalVP,
                   horizontalVP: horizontalVP, cropQuad: out.sourceQuad,
                   scores: azimuthScores) {
                   displayBuffer = diag

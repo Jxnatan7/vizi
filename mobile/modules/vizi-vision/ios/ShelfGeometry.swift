@@ -43,6 +43,12 @@ enum ShelfGeometry {
     var lying: [Int] = []
     /// `true` quando a vertical veio da gravidade, não das lombadas.
     var usedGravity = false
+    /// Reta das bases da fileira mais populosa, em coordenadas canônicas.
+    ///
+    /// Cruzada com o horizonte, dá o ponto de fuga horizontal. É a
+    /// combinação que faltava: a primeira tentativa usou as bases sem
+    /// horizonte confiável, porque a vertical vinha do PCA.
+    var bestBaseLine: Projective.H?
     /// Texto para a tela, não para o log: "Poucos livros para estimar a
     /// perspectiva" diz o que fazer diferente; "confiança 0.31" não diz nada.
     var declineReason: String?
@@ -266,8 +272,12 @@ enum ShelfGeometry {
                       declineReason: "O quadrilátero estimado não faz sentido")
     }
 
+    // A fileira com mais livros dá a reta de base mais confiável.
+    let best = usable.max { $0.indices.count < $1.indices.count }
+    let baseLine: Projective.H? = best.map { ($0.slope, -1, $0.intercept) }
+
     return Estimate(quad: quad, confidence: confidence, rows: rows, lying: lyingIdx,
-                    usedGravity: usedGravity, declineReason: nil)
+                    usedGravity: usedGravity, bestBaseLine: baseLine, declineReason: nil)
   }
 
   /// Eixo médio das lombadas, normalizado.

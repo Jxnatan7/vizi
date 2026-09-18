@@ -195,7 +195,7 @@ export default function CameraScreen() {
 
             <Button c={c} disabled={false} title={copied ? 'Copiado ✓' : 'Copiar sessão (JSON)'}
               onPress={async () => {
-                await copySessionToClipboard(session);
+                await copySessionToClipboard(session, result);
                 setCopied(true);
               }} />
           </>

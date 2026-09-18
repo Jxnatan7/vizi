@@ -67,9 +67,21 @@ enum PlaneRectifier {
     guard mapped.count == region.count else {
       return rotationOnly(image: image, gravity: g, region: region, margin: margin)
     }
+    // Um ponto perto da linha de fuga explode ao ser retificado, e um único
+    // desses domina o retângulo. O diagnóstico mostrou o recorte colapsando
+    // numa linha — era isto.
+    for p in mapped where !p.x.isFinite || !p.y.isFinite {
+      return rotationOnly(image: image, gravity: g, region: region, margin: margin)
+    }
     var minX = mapped.map(\.x).min()!, maxX = mapped.map(\.x).max()!
     var minY = mapped.map(\.y).min()!, maxY = mapped.map(\.y).max()!
-    guard maxX > minX, maxY > minY else {
+    let spanX = maxX - minX, spanY = maxY - minY
+    guard spanX > 1e-6, spanY > 1e-6 else {
+      return rotationOnly(image: image, gravity: g, region: region, margin: margin)
+    }
+    // Proporção absurda indica que a retificação esticou um eixo ao infinito.
+    let ratio = max(spanX, spanY) / min(spanX, spanY)
+    guard ratio < 40 else {
       return rotationOnly(image: image, gravity: g, region: region, margin: margin)
     }
 
@@ -92,6 +104,19 @@ enum PlaneRectifier {
     }
     // Fora da imagem por muito indica extrapolação, não enquadramento.
     for p in source where abs(Double(p.x)) > Double(w) * 3 || abs(Double(p.y)) > Double(h) * 3 {
+      return rotationOnly(image: image, gravity: g, region: region, margin: margin)
+    }
+
+    // O quadrilátero de origem precisa ter ÁREA. Colapsado numa linha, o
+    // CIPerspectiveCorrection produz lixo em vez de falhar — que foi
+    // exatamente o que apareceu no diagnóstico.
+    var area = 0.0
+    for i in 0..<4 {
+      let a = source[i], b = source[(i + 1) % 4]
+      area += Double(a.x * b.y - b.x * a.y)
+    }
+    area = abs(area) / 2
+    guard area > Double(w) * Double(h) * 0.01 else {
       return rotationOnly(image: image, gravity: g, region: region, margin: margin)
     }
 

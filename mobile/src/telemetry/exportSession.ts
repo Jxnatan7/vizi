@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 
-import type { Session } from '../../modules/vizi-vision';
+import type { CaptureResult, Session } from '../../modules/vizi-vision';
 
 /**
  * Sessão → JSON → área de transferência.
@@ -9,8 +9,14 @@ import type { Session } from '../../modules/vizi-vision';
  * `specs/002-camera-telemetry/medicoes/` e o número deixa de depender de
  * alguém lembrar dele.
  */
-export async function copySessionToClipboard(session: Session): Promise<number> {
-  const json = JSON.stringify(session, null, 2);
+export async function copySessionToClipboard(
+  session: Session,
+  lastCapture?: CaptureResult | null,
+): Promise<number> {
+  // A curva de azimute e o veredito da geometria vivem no retorno da captura,
+  // não na telemetria ao vivo. Sem isto o diagnóstico numérico não tem como
+  // sair do aparelho — só o visual sai, pela tela.
+  const json = JSON.stringify({ session, lastCapture: lastCapture ?? null }, null, 2);
   await Clipboard.setStringAsync(json);
   return json.length;
 }
