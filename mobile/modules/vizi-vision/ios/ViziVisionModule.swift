@@ -227,6 +227,14 @@ public class ViziVisionModule: Module {
           shelfCount = estimate.rows.count
           lyingCount = estimate.lying.count
           usedGravity = estimate.usedGravity
+          rowsForShelves = estimate.rows
+
+          // Contagem por fileira já vale por si; as divisões só existem quando
+          // há retificação, e são preenchidas adiante. Atribuir aqui garante
+          // que a ordem "usa antes de atribuir" não se repita.
+          shelves = estimate.rows.map {
+            ["count": $0.indices.count, "dividers": [Double](), "top": 0.0, "bottom": 0.0]
+          }
 
           // ── Retificação pelo PLANO, não pelos objetos ──────────────────
           //
@@ -365,10 +373,6 @@ public class ViziVisionModule: Module {
             declineReason = "sem leitura de gravidade"
           }
 
-          shelves = estimate.rows.map {
-            ["count": $0.indices.count, "dividers": [Double](), "top": 0.0, "bottom": 0.0]
-          }
-          rowsForShelves = estimate.rows
           confidence = azimuthConfidence
         }
 
