@@ -18,4 +18,14 @@ export const DEFAULT_CAPTURE: CaptureOptions = {
   minGeometryConfidence: 0.6,
 
   transitionMs: 600,
+
+  /**
+   * Mostra horizonte, pontos de fuga, recorte e a curva de azimute sobre a
+   * foto crua, em vez do resultado.
+   *
+   * Existe porque geometria projetiva falha de formas que parecem iguais na
+   * saída — horizonte torto, ponto de fuga errado e cantos trocados produzem
+   * todos "a imagem ficou estranha". Sem ver as etapas, consertar é adivinhar.
+   */
+  diagnostics: false,
 };

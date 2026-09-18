@@ -20,6 +20,9 @@ enum AzimuthSearch {
     var vanishingPoint: Projective.H
     /// 0 a 1. Proeminência do pico sobre o restante da varredura.
     var confidence: Double
+    /// A varredura inteira, normalizada. Um pico nítido significa estrutura
+    /// horizontal dominante; um platô significa escolha arbitrária.
+    var scores: [Double]
   }
 
   /// Trabalha numa versão reduzida, e **isotrópica**: no espaço canônico o
@@ -131,7 +134,10 @@ enum AzimuthSearch {
     let vp = winner.vp
     let full: Projective.H = (vp.x * inv, vp.y * inv, vp.w)
 
-    return Result(vanishingPoint: full, confidence: min(1, max(0, prominence)))
+    let peak = scores.max() ?? 1
+    return Result(vanishingPoint: full,
+                  confidence: min(1, max(0, prominence)),
+                  scores: peak > 0 ? scores.map { $0 / peak } : scores)
   }
 
   // MARK: - Auxiliares

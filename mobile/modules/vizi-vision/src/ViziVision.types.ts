@@ -190,6 +190,8 @@ export type CaptureOptions = {
   minInstancesForGeometry: number;
   minGeometryConfidence: number;
   transitionMs: number;
+  /** Mostra o que o algoritmo inferiu em vez do resultado. */
+  diagnostics: boolean;
 };
 
 export type CaptureResult = {
@@ -217,6 +219,11 @@ export type CaptureResult = {
   lyingCount: number;
   /** `true` quando a vertical veio da gravidade, não das lombadas. */
   usedGravity: boolean;
+  /**
+   * A varredura de azimute inteira, normalizada. Pico nítido significa
+   * estrutura horizontal dominante; platô significa escolha arbitrária.
+   */
+  azimuthScores: number[];
   /**
    * **Identificador, não pixels.** A foto em resolução máxima fica no nativo;
    * atravessar a fronteira com ela violaria o princípio II num caso em que

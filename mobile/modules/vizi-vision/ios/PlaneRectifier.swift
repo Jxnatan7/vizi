@@ -14,6 +14,10 @@ enum PlaneRectifier {
     var fullyRectified: Bool
     /// Mapeia do espaço da foto em retrato para o resultado.
     var transform: [Double]
+    /// Onde o recorte caiu na foto original. Só para diagnóstico.
+    var sourceQuad: [CGPoint]
+    /// Ponto de fuga vertical usado, para diagnóstico.
+    var verticalVP: Projective.H?
   }
 
   /// - Parameters:
@@ -102,7 +106,8 @@ enum PlaneRectifier {
       return rotationOnly(image: image, gravity: g, region: region, margin: margin)
     }
 
-    return Output(image: out, fullyRectified: true, transform: hMat)
+    return Output(image: out, fullyRectified: true, transform: hMat,
+                  sourceQuad: source, verticalVP: verticalVP)
   }
 
   /// Recuo: só deixa a imagem em pé, usando a gravidade.
@@ -132,7 +137,8 @@ enum PlaneRectifier {
     guard crop.extent.width > 1, crop.extent.height > 1 else { return nil }
     return Output(image: crop, fullyRectified: false,
                   transform: [Double(rot.a), Double(rot.c), Double(rot.tx),
-                              Double(rot.b), Double(rot.d), Double(rot.ty), 0, 0, 1])
+                              Double(rot.b), Double(rot.d), Double(rot.ty), 0, 0, 1],
+                  sourceQuad: [], verticalVP: nil)
   }
 
   // MARK: - Matriz 3×3

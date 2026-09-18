@@ -24,6 +24,8 @@ struct CaptureOptions: Record {
   @Field var minInstancesForGeometry: Int = 5
   @Field var minGeometryConfidence: Double = 0.6
   @Field var transitionMs: Int = 600
+  /// Mostra o que o algoritmo inferiu em vez do resultado. Política em TS.
+  @Field var diagnostics: Bool = false
 }
 
 struct OverlayStyleRecord: Record {
@@ -189,6 +191,9 @@ public class ViziVisionModule: Module {
         var shelfCount = 0
         var lyingCount = 0
         var usedGravity = false
+        /// O overlay precisa ser limpo sempre que a imagem exibida deixar de
+        /// ser a canônica — não só quando houver endireitamento. Girada conta.
+        var imageReplaced = false
         var displayBuffer = square
 
         if let protos = result.protos {
@@ -240,13 +245,19 @@ public class ViziVisionModule: Module {
 
           var azimuthConfidence = 0.0
           var horizontalVP: Projective.H?
+          var azimuthScores: [Double] = []
+          let halfFov = self.coordinator.fieldOfView * .pi / 360
+          let fPortrait = halfFov > 1e-6
+            ? Double(max(portrait.extent.width, portrait.extent.height)) / 2 / tan(halfFov)
+            : Double(max(portrait.extent.width, portrait.extent.height))
           if let g = gravity {
             if let found = AzimuthSearch.search(
               portrait: portrait, gravity: g,
               fieldOfViewDegrees: self.coordinator.fieldOfView,
-              context: self.ciContext), found.confidence >= 0.15 {
-              horizontalVP = found.vanishingPoint
+              context: self.ciContext) {
+              azimuthScores = found.scores
               azimuthConfidence = found.confidence
+              if found.confidence >= 0.15 { horizontalVP = found.vanishingPoint }
             }
 
             if !region.isEmpty,
@@ -255,11 +266,31 @@ public class ViziVisionModule: Module {
                  region: region, fieldOfViewDegrees: self.coordinator.fieldOfView,
                  margin: options.cropMargin),
                let rendered = Rectify.render(out.image, context: self.ciContext) {
-              displayBuffer = rendered
               straightened = out.fullyRectified
               declineReason = out.fullyRectified
                 ? ""
                 : "perspectiva não estimada — só a rotação foi corrigida"
+
+              if options.diagnostics {
+                // Sobre a foto CRUA: horizonte, pontos de fuga, recorte e a
+                // curva. Uma captura passa a dizer qual etapa falhou.
+                let horizon = Projective.horizon(
+                  gravity: g,
+                  focal: Projective.Focal(x: fPortrait, y: fPortrait),
+                  center: CGPoint(x: portrait.extent.width / 2,
+                                  y: portrait.extent.height / 2))
+                if let diag = Diagnostics.draw(
+                  portrait: portrait, context: self.ciContext,
+                  horizon: horizon, verticalVP: out.verticalVP,
+                  horizontalVP: horizontalVP, cropQuad: out.sourceQuad,
+                  scores: azimuthScores) {
+                  displayBuffer = diag
+                  imageReplaced = true
+                }
+              } else {
+                displayBuffer = rendered
+                imageReplaced = true
+              }
             }
           } else {
             declineReason = "sem leitura de gravidade"
@@ -277,7 +308,7 @@ public class ViziVisionModule: Module {
 
         // O overlay ao vivo não vale sobre a imagem endireitada — as
         // coordenadas são de outro espaço. Limpa em vez de desenhar errado.
-        if straightened {
+        if imageReplaced {
           self.coordinator.results.publishOverriding(instances: [], protos: nil)
         } else {
           self.coordinator.results.publishOverriding(
@@ -293,6 +324,7 @@ public class ViziVisionModule: Module {
           "shelfCount": shelfCount,
           "lyingCount": lyingCount,
           "usedGravity": usedGravity,
+          "azimuthScores": azimuthScores,
           "imageId": UUID().uuidString,
           "elapsedMs": shot.elapsedMs,
           "photoWidth": CVPixelBufferGetWidth(shot.buffer),

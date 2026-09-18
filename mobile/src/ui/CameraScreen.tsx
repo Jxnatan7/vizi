@@ -20,7 +20,7 @@ export default function CameraScreen() {
   const c = dark ? colors.dark : colors.light;
   const { info, sample, session, error, transform, overlay, start, stop, setTransform, setOverlay } = useSession();
   const [copied, setCopied] = useState(false);
-  const { state, result, error: captureError, capture, dismiss } = useCapture();
+  const { state, result, error: captureError, capture, dismiss, diagnostics, setDiagnostics } = useCapture();
   const verdicts = useMemo(() => (session ? evaluateGate(session) : []), [session]);
 
   return (
@@ -94,8 +94,20 @@ export default function CameraScreen() {
         </View>
 
         {info && state !== 'result' && (
-          <Button c={c} onPress={capture} disabled={state === 'capturing'}
-            title={state === 'capturing' ? 'Capturando…' : 'Capturar'} />
+          <>
+            <Button c={c} onPress={capture} disabled={state === 'capturing'}
+              title={state === 'capturing' ? 'Capturando…' : 'Capturar'} />
+            <Pressable
+              onPress={() => setDiagnostics(!diagnostics)}
+              style={[styles.mode, {
+                borderColor: diagnostics ? c.warn : c.line,
+                backgroundColor: c.bgAlt,
+              }]}>
+              <Text style={{ color: diagnostics ? c.warn : c.muted, fontSize: 12, fontWeight: '600' }}>
+                {diagnostics ? 'diagnóstico LIGADO' : 'diagnóstico'}
+              </Text>
+            </Pressable>
+          </>
         )}
 
         {state === 'result' && result && (
