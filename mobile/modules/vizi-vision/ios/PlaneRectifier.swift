@@ -18,6 +18,9 @@ enum PlaneRectifier {
     var sourceQuad: [CGPoint]
     /// Ponto de fuga vertical usado, para diagnóstico.
     var verticalVP: Projective.H?
+    /// Qual guarda disparou, quando houve recuo. Sem isto, "não endireitou"
+    /// tem cinco causas possíveis com o mesmo sintoma.
+    var fallbackReason: String?
   }
 
   /// - Parameters:
@@ -51,13 +54,24 @@ enum PlaneRectifier {
     let ox = region.map { Double($0.x) }.reduce(0, +) / Double(region.count)
     let oy = region.map { Double($0.y) }.reduce(0, +) / Double(region.count)
 
+    // **Normalizar as colunas.** Com livros verticais e estante quase frontal,
+    // os dois pontos de fuga ficam perto do infinito e seus vetores homogêneos
+    // saem com magnitudes muito diferentes — um na casa de 10⁶, outro de 10³.
+    // A matriz fica mal escalada, as coordenadas retificadas saem com
+    // proporção absurda, e a guarda de proporção rejeita o caso BOM.
+    func unit(_ v: Projective.H) -> Projective.H {
+      let n = sqrt(v.x * v.x + v.y * v.y + v.w * v.w)
+      return n > 1e-12 ? (v.x / n, v.y / n, v.w / n) : v
+    }
+    let hN = unit(hVP), vN = unit(verticalVP), oN = unit((ox, oy, 1))
+
     // M leva o espaço retificado ao espaço da foto:
     //   (1,0,0) → ponto de fuga horizontal
     //   (0,1,0) → ponto de fuga vertical
     //   (0,0,1) → origem
-    let m: [Double] = [hVP.x, verticalVP.x, ox,
-                       hVP.y, verticalVP.y, oy,
-                       hVP.w, verticalVP.w, 1]
+    let m: [Double] = [hN.x, vN.x, oN.x,
+                       hN.y, vN.y, oN.y,
+                       hN.w, vN.w, oN.w]
     guard let hMat = invert(m) else {
       return rotationOnly(image: image, gravity: g, region: region, margin: margin)
     }
@@ -71,18 +85,18 @@ enum PlaneRectifier {
     // desses domina o retângulo. O diagnóstico mostrou o recorte colapsando
     // numa linha — era isto.
     for p in mapped where !p.x.isFinite || !p.y.isFinite {
-      return rotationOnly(image: image, gravity: g, region: region, margin: margin)
+      return rotationOnly(image: image, gravity: g, region: region, margin: margin, reason: "ponto retificado não-finito")
     }
     var minX = mapped.map(\.x).min()!, maxX = mapped.map(\.x).max()!
     var minY = mapped.map(\.y).min()!, maxY = mapped.map(\.y).max()!
     let spanX = maxX - minX, spanY = maxY - minY
     guard spanX > 1e-6, spanY > 1e-6 else {
-      return rotationOnly(image: image, gravity: g, region: region, margin: margin)
+      return rotationOnly(image: image, gravity: g, region: region, margin: margin, reason: "retângulo sem extensão")
     }
     // Proporção absurda indica que a retificação esticou um eixo ao infinito.
     let ratio = max(spanX, spanY) / min(spanX, spanY)
     guard ratio < 40 else {
-      return rotationOnly(image: image, gravity: g, region: region, margin: margin)
+      return rotationOnly(image: image, gravity: g, region: region, margin: margin, reason: "proporção acima de 40:1")
     }
 
     // A margem entra AQUI, no espaço retificado — é o que garante que a base
@@ -117,7 +131,7 @@ enum PlaneRectifier {
     }
     area = abs(area) / 2
     guard area > Double(w) * Double(h) * 0.01 else {
-      return rotationOnly(image: image, gravity: g, region: region, margin: margin)
+      return rotationOnly(image: image, gravity: g, region: region, margin: margin, reason: "quadrilátero sem área")
     }
 
     let flip = { (p: CGPoint) in CGPoint(x: p.x, y: h - p.y) }
@@ -132,7 +146,7 @@ enum PlaneRectifier {
     }
 
     return Output(image: out, fullyRectified: true, transform: hMat,
-                  sourceQuad: source, verticalVP: verticalVP)
+                  sourceQuad: source, verticalVP: verticalVP, fallbackReason: nil)
   }
 
   /// Recuo: só deixa a imagem em pé, usando a gravidade.
@@ -141,7 +155,7 @@ enum PlaneRectifier {
   /// **nunca piora** — uma rotação não pode deixar a imagem mais torta.
   private static func rotationOnly(
     image: CIImage, gravity g: DeviceAttitude.Gravity,
-    region: [CGPoint], margin: Double
+    region: [CGPoint], margin: Double, reason: String = "sem ponto de fuga horizontal"
   ) -> Output? {
     let h = image.extent.height
     // A gravidade vem em coordenadas de imagem (y para baixo); o CIImage tem y
@@ -163,7 +177,7 @@ enum PlaneRectifier {
     return Output(image: crop, fullyRectified: false,
                   transform: [Double(rot.a), Double(rot.c), Double(rot.tx),
                               Double(rot.b), Double(rot.d), Double(rot.ty), 0, 0, 1],
-                  sourceQuad: [], verticalVP: nil)
+                  sourceQuad: [], verticalVP: nil, fallbackReason: reason)
   }
 
   // MARK: - Matriz 3×3

@@ -301,7 +301,7 @@ public class ViziVisionModule: Module {
               straightened = out.fullyRectified
               declineReason = out.fullyRectified
                 ? ""
-                : "perspectiva não estimada — só a rotação foi corrigida"
+                : "só rotação — \(out.fallbackReason ?? "motivo desconhecido")"
 
               if options.diagnostics {
                 // Sobre a foto CRUA: horizonte, pontos de fuga, recorte e a
