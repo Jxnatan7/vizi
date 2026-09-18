@@ -105,6 +105,8 @@ export default function CameraScreen() {
             <Row c={c} label="tempo" value={`${result.elapsedMs.toFixed(0)} ms`} strong />
             <Row c={c} label="endireitado" value={result.straightened ? 'sim' : `não — ${result.declineReason}`} />
             <Row c={c} label="confiança" value={result.geometryConfidence.toFixed(3)} />
+            <Row c={c} label="vertical" value={result.usedGravity ? 'gravidade' : 'lombadas (recuo)'} />
+            <Row c={c} label="deitados" value={String(result.lyingCount)} />
             <Row c={c} label="prateleiras" value={String(result.shelfCount)} strong />
             {result.shelves.map((sh, i) => (
               <Row key={i} c={c} label={`fileira ${i + 1}`}

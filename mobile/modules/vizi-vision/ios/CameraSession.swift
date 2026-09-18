@@ -48,6 +48,8 @@ final class CameraSession: NSObject {
   private(set) var captureWidth = 0
   private(set) var captureHeight = 0
   private(set) var maxFrameRate: Double = 0
+  /// Abertura horizontal do sensor, para derivar a distância focal.
+  var fieldOfView: Double { Double(device?.activeFormat.videoFieldOfView ?? 0) }
 
   // MARK: - Permissão
 

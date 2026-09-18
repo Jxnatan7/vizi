@@ -39,6 +39,10 @@ enum ShelfGeometry {
     var quad: Quad?
     var confidence: Double
     var rows: [Row] = []
+    /// Objetos que não estão em pé. Contados e marcados, fora da geometria.
+    var lying: [Int] = []
+    /// `true` quando a vertical veio da gravidade, não das lombadas.
+    var usedGravity = false
     /// Texto para a tela, não para o log: "Poucos livros para estimar a
     /// perspectiva" diz o que fazer diferente; "confiança 0.31" não diz nada.
     var declineReason: String?
@@ -54,134 +58,216 @@ enum ShelfGeometry {
     var halfWidth: Double
   }
 
+  /// Tolerância para considerar uma lombada "em pé".
+  ///
+  /// Só é mensurável porque a gravidade dá referência absoluta. Sem ela, a
+  /// única saída seria inferir pela maioria — circular quando metade dos
+  /// objetos está deitada.
+  private static let standingToleranceRadians = 25.0 * .pi / 180
+
   static func estimate(
     instances: [Instance],
     protos: MLMultiArray,
     imageSide: Int,
+    gravity: DeviceAttitude.Gravity?,
+    focal: Projective.Focal,
     minInstances: Int,
     minConfidence: Double
   ) -> Estimate {
     guard instances.count >= minInstances else {
-      return Estimate(quad: nil, confidence: 0, rows: [],
+      return Estimate(quad: nil, confidence: 0, rows: [], lying: [], usedGravity: gravity != nil,
                       declineReason: "Poucos livros para estimar a perspectiva (\(instances.count))")
     }
 
     let spines = instances.compactMap { spine(for: $0, protos: protos, imageSide: imageSide) }
     guard spines.count >= minInstances else {
-      return Estimate(quad: nil, confidence: 0, rows: [],
+      return Estimate(quad: nil, confidence: 0, rows: [], lying: [], usedGravity: gravity != nil,
                       declineReason: "Não foi possível medir a inclinação das lombadas")
+    }
+
+    // ── Referência vertical ───────────────────────────────────────────────
+    //
+    // Da gravidade quando disponível: independe do conteúdo, funciona com um
+    // livro ou cinquenta, e não se importa se algum está deitado. As lombadas
+    // ficam como recuo.
+    let center = CGPoint(x: CGFloat(imageSide) / 2, y: CGFloat(imageSide) / 2)
+    let usedGravity = gravity != nil
+
+    let up: (dx: Double, dy: Double)
+    let verticalVP: Projective.H
+    let horizonLine: Projective.H?
+
+    if let g = gravity {
+      up = g.upInImage
+      if let vp = Projective.verticalVanishingPoint(gravity: g, focal: focal, center: center) {
+        verticalVP = Projective.point(vp)
+      } else {
+        // Gravidade paralela ao plano da imagem: verticais paralelas, ponto de
+        // fuga no infinito.
+        verticalVP = (up.dx, up.dy, 0)
+      }
+      horizonLine = Projective.horizon(gravity: g, focal: focal, center: center)
+    } else {
+      let axis = averageAxis(spines)
+      up = (Double(axis.dx), Double(axis.dy))
+      verticalVP = (up.dx, up.dy, 0)
+      horizonLine = nil
+    }
+
+    // ── Em pé ou deitado ──────────────────────────────────────────────────
+    var standingIdx: [Int] = []
+    var lyingIdx: [Int] = []
+    for (i, s) in spines.enumerated() {
+      // Direção esperada: do centro da lombada para o ponto de fuga vertical.
+      var ex = up.dx, ey = up.dy
+      if let vp = Projective.toPoint(verticalVP) {
+        let dx = Double(vp.x - s.center.x), dy = Double(vp.y - s.center.y)
+        let n = hypot(dx, dy)
+        if n > 1e-6 { ex = dx / n; ey = dy / n }
+      }
+      let dot = Double(s.axis.dx) * ex + Double(s.axis.dy) * ey
+      // O eixo do PCA não tem sentido definido; o que importa é o alinhamento.
+      if acos(min(1, max(-1, abs(dot)))) <= standingToleranceRadians {
+        standingIdx.append(i)
+      } else {
+        lyingIdx.append(i)
+      }
+    }
+
+    guard standingIdx.count >= minInstances else {
+      return Estimate(quad: nil, confidence: 0, rows: [], lying: lyingIdx,
+                      usedGravity: usedGravity,
+                      declineReason: "Poucos objetos em pé para estimar a estante")
     }
 
     // ── Agrupar em fileiras ───────────────────────────────────────────────
     //
     // Uma reta única através das bases de duas prateleiras passa no meio das
-    // duas e não descreve nenhuma. Antes de ajustar qualquer reta, é preciso
-    // saber quem está em que fileira.
-    //
-    // Projetar a base de cada livro no eixo médio das lombadas dá a "altura"
-    // de cada um. Agrupar nessa única dimensão, cortando onde houver vão maior
-    // que meia altura de livro.
-    let meanAxis = averageAxis(spines)
-    let levels = spines.map { Double($0.base.x) * meanAxis.dx + Double($0.base.y) * meanAxis.dy }
-    let heights = spines.map { hypot(Double($0.top.x - $0.base.x), Double($0.top.y - $0.base.y)) }
+    // duas e não descreve nenhuma. Projetar a base no eixo vertical dá a
+    // "altura" de cada livro; agrupar nessa dimensão, cortando onde houver vão
+    // maior que meia altura mediana.
+    let levelOf = { (p: CGPoint) in Double(p.x) * up.dx + Double(p.y) * up.dy }
+    let heights = standingIdx.map {
+      hypot(Double(spines[$0].top.x - spines[$0].base.x), Double(spines[$0].top.y - spines[$0].base.y))
+    }
     let medianHeight = heights.sorted()[heights.count / 2]
     let gapThreshold = max(medianHeight * 0.5, Double(imageSide) * 0.02)
 
-    let order = levels.indices.sorted { levels[$0] < levels[$1] }
+    let order = standingIdx.sorted { levelOf(spines[$0].base) < levelOf(spines[$1].base) }
     var groups: [[Int]] = []
     var current: [Int] = []
     for (k, idx) in order.enumerated() {
-      if k > 0, levels[idx] - levels[order[k - 1]] > gapThreshold {
+      if k > 0, levelOf(spines[idx].base) - levelOf(spines[order[k - 1]].base) > gapThreshold {
         groups.append(current); current = []
       }
       current.append(idx)
     }
     if !current.isEmpty { groups.append(current) }
 
-    // ── Uma reta por fileira ──────────────────────────────────────────────
     let minPerRow = 3
     var rows: [Row] = []
     var residuals: [Double] = []
-
     for g in groups {
-      let pts = g.map { spines[$0].base }
-      let level = g.map { levels[$0] }.reduce(0, +) / Double(g.count)
-      if g.count >= minPerRow, let (a, b, r) = fitLine(pts) {
+      let level = g.map { levelOf(spines[$0].base) }.reduce(0, +) / Double(g.count)
+      if g.count >= minPerRow, let (a, b, r) = fitLine(g.map { spines[$0].base }) {
         rows.append(Row(indices: g, slope: a, intercept: b, level: level, usedForGeometry: true))
         residuals.append(r)
       } else {
-        // Conta os livros, mas não entra na geometria.
         rows.append(Row(indices: g, slope: 0, intercept: 0, level: level, usedForGeometry: false))
+      }
+    }
+
+    // Deitados entram na fileira mais próxima, só para contagem.
+    for i in lyingIdx {
+      let l = levelOf(spines[i].base)
+      if let nearest = rows.indices.min(by: { abs(rows[$0].level - l) < abs(rows[$1].level - l) }) {
+        rows[nearest].indices.append(i)
       }
     }
 
     let usable = rows.filter { $0.usedForGeometry }
     guard let lowest = usable.min(by: { $0.level < $1.level }) else {
-      return Estimate(quad: nil, confidence: 0, rows: rows,
+      return Estimate(quad: nil, confidence: 0, rows: rows, lying: lyingIdx,
+                      usedGravity: usedGravity,
                       declineReason: "Nenhuma fileira com livros suficientes para estimar a perspectiva")
     }
 
-    // Consistência das lombadas: se apontam para direções muito diferentes, ou
-    // a cena não é uma estante, ou a segmentação está ruim.
-    let angles = spines.map { atan2($0.axis.dy, $0.axis.dx) }
-    let meanAngle = angles.reduce(0, +) / Double(angles.count)
-    let angleSpread = angles.map { abs($0 - meanAngle) }.max() ?? .pi
-
-    // Consistência entre fileiras: as retas convergem no ponto de fuga, então
-    // as inclinações são parecidas. Muito diferentes indica agrupamento errado.
-    let slopeSpread: Double
-    if usable.count >= 2 {
-      let s = usable.map(\.slope)
-      slopeSpread = (s.max() ?? 0) - (s.min() ?? 0)
+    // ── Ponto de fuga horizontal ──────────────────────────────────────────
+    //
+    // A reta das bases encontra o horizonte exatamente no ponto de fuga
+    // horizontal. Com o horizonte da gravidade, o erro perpendicular a ele é
+    // descartado por construção — um grau de liberdade a menos.
+    let baseLine: Projective.H = (lowest.slope, -1, lowest.intercept)
+    let horizontalVP: Projective.H
+    if let horizon = horizonLine {
+      let inter = Projective.cross(baseLine, horizon)
+      horizontalVP = abs(inter.w) > 1e-9 ? inter : (1, lowest.slope, 0)
     } else {
-      slopeSpread = 0
+      horizontalVP = (1, lowest.slope, 0)
     }
 
+    // ── O quadrilátero ────────────────────────────────────────────────────
+    let sorted = standingIdx.sorted { spines[$0].center.x < spines[$1].center.x }
+    guard let leftIdx = sorted.first, let rightIdx = sorted.last else {
+      return Estimate(quad: nil, confidence: 0, rows: rows, lying: lyingIdx,
+                      usedGravity: usedGravity, declineReason: "Sem extremos")
+    }
+    let left = spines[leftIdx], right = spines[rightIdx]
+
+    // Bordas laterais: passam pelo ponto de fuga vertical.
+    let leftEdge = Projective.cross(
+      Projective.point(CGPoint(x: left.base.x - CGFloat(left.halfWidth), y: left.base.y)), verticalVP)
+    let rightEdge = Projective.cross(
+      Projective.point(CGPoint(x: right.base.x + CGFloat(right.halfWidth), y: right.base.y)), verticalVP)
+
+    // Bordas inferior e superior: passam pelo ponto de fuga horizontal.
+    let topPoint = standingIdx
+      .map { spines[$0].top }
+      .max { levelOf($0) < levelOf($1) } ?? left.top
+    let bottomEdge = Projective.cross(Projective.point(left.base), horizontalVP)
+    let topEdge = Projective.cross(Projective.point(topPoint), horizontalVP)
+
+    guard let bl = Projective.toPoint(Projective.cross(bottomEdge, leftEdge)),
+          let br = Projective.toPoint(Projective.cross(bottomEdge, rightEdge)),
+          let tl = Projective.toPoint(Projective.cross(topEdge, leftEdge)),
+          let tr = Projective.toPoint(Projective.cross(topEdge, rightEdge))
+    else {
+      return Estimate(quad: nil, confidence: 0, rows: rows, lying: lyingIdx,
+                      usedGravity: usedGravity, declineReason: "As bordas da estante não se cruzam")
+    }
+    let quad = Quad(topLeft: tl, topRight: tr, bottomLeft: bl, bottomRight: br)
+
+    // ── Confiança ─────────────────────────────────────────────────────────
+    let angles = standingIdx.map { atan2(Double(spines[$0].axis.dy), Double(spines[$0].axis.dx)) }
+    let meanAngle = angles.reduce(0, +) / Double(angles.count)
+    let angleSpread = angles.map { abs($0 - meanAngle) }.max() ?? .pi
+    let slopeSpread = usable.count >= 2
+      ? (usable.map(\.slope).max()! - usable.map(\.slope).min()!) : 0
     let avgResidual = residuals.isEmpty ? .infinity : residuals.reduce(0, +) / Double(residuals.count)
-    let countScore = min(1.0, Double(spines.count) / 12.0)
+
+    let countScore = min(1.0, Double(standingIdx.count) / 12.0)
     let lineScore = max(0, 1 - avgResidual / (Double(imageSide) * 0.02))
     let spreadScore = max(0, 1 - angleSpread / 0.5)
     let rowScore = max(0, 1 - slopeSpread / 0.3)
-    let confidence = countScore * 0.15 + lineScore * 0.35 + spreadScore * 0.30 + rowScore * 0.20
+    // Com gravidade a vertical não é estimativa, então o peso da dispersão das
+    // lombadas cai e o da qualidade das retas sobe.
+    let confidence = usedGravity
+      ? countScore * 0.15 + lineScore * 0.50 + spreadScore * 0.10 + rowScore * 0.25
+      : countScore * 0.15 + lineScore * 0.35 + spreadScore * 0.30 + rowScore * 0.20
 
     guard confidence >= minConfidence else {
-      return Estimate(quad: nil, confidence: confidence, rows: rows,
+      return Estimate(quad: nil, confidence: confidence, rows: rows, lying: lyingIdx,
+                      usedGravity: usedGravity,
                       declineReason: "Geometria pouco confiável — tente de frente para a estante")
     }
-
-    // ── O quadrilátero cobre a estante inteira ────────────────────────────
-    //
-    // Base na reta da fileira MAIS BAIXA, topo no ponto mais alto de qualquer
-    // livro. Uma homografia só, porque as prateleiras são coplanares.
-    let sorted = spines.sorted { $0.center.x < $1.center.x }
-    guard let left = sorted.first, let right = sorted.last else {
-      return Estimate(quad: nil, confidence: confidence, rows: rows, declineReason: "Sem extremos")
-    }
-
-    let onLine = { (x: Double) in
-      CGPoint(x: x, y: lowest.slope * x + lowest.intercept)
-    }
-    let leftBase = onLine(Double(left.center.x) - left.halfWidth)
-    let rightBase = onLine(Double(right.center.x) + right.halfWidth)
-
-    // Altura total: da base da fileira mais baixa ao topo mais alto.
-    let topLevels = spines.map { Double($0.top.x) * meanAxis.dx + Double($0.top.y) * meanAxis.dy }
-    let totalHeight = (topLevels.max() ?? 0) - lowest.level
-
-    let quad = Quad(
-      topLeft: CGPoint(x: leftBase.x + left.axis.dx * totalHeight,
-                       y: leftBase.y + left.axis.dy * totalHeight),
-      topRight: CGPoint(x: rightBase.x + right.axis.dx * totalHeight,
-                        y: rightBase.y + right.axis.dy * totalHeight),
-      bottomLeft: leftBase,
-      bottomRight: rightBase)
-
     guard isSane(quad, imageSide: imageSide) else {
-      return Estimate(quad: nil, confidence: confidence, rows: rows,
+      return Estimate(quad: nil, confidence: confidence, rows: rows, lying: lyingIdx,
+                      usedGravity: usedGravity,
                       declineReason: "O quadrilátero estimado não faz sentido")
     }
 
-    return Estimate(quad: quad, confidence: confidence, rows: rows, declineReason: nil)
+    return Estimate(quad: quad, confidence: confidence, rows: rows, lying: lyingIdx,
+                    usedGravity: usedGravity, declineReason: nil)
   }
 
   /// Eixo médio das lombadas, normalizado.

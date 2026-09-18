@@ -186,18 +186,38 @@ public class ViziVisionModule: Module {
         var declineReason = "sem protótipos de máscara"
         var confidence = 0.0
         var shelves: [[String: Any]] = []
+        var shelfCount = 0
+        var lyingCount = 0
+        var usedGravity = false
         var displayBuffer = square
 
         if let protos = result.protos {
+          // A atitude é amostrada NO disparo, não depois: medir a inclinação
+          // um instante mais tarde é medir outro momento.
+          let gravity = self.coordinator.attitude.snapshot()
+          let photoW = Double(CVPixelBufferGetWidth(shot.buffer))
+          let photoH = Double(CVPixelBufferGetHeight(shot.buffer))
+          let focal = Projective.Focal.from(
+            fieldOfViewDegrees: self.coordinator.fieldOfView,
+            sensorLongSide: max(photoW, photoH),
+            portraitWidth: min(photoW, photoH),
+            portraitHeight: max(photoW, photoH),
+            canonicalSide: Double(side))
+
           let estimate = ShelfGeometry.estimate(
             instances: result.instances,
             protos: protos,
             imageSide: side,
+            gravity: gravity,
+            focal: focal,
             minInstances: options.minInstancesForGeometry,
             minConfidence: options.minGeometryConfidence)
 
           confidence = estimate.confidence
           declineReason = estimate.declineReason ?? ""
+          shelfCount = estimate.rows.count
+          lyingCount = estimate.lying.count
+          usedGravity = estimate.usedGravity
 
           if let quad = estimate.quad,
              let out = Rectify.straighten(
@@ -235,7 +255,9 @@ public class ViziVisionModule: Module {
           "declineReason": declineReason,
           "geometryConfidence": confidence,
           "shelves": shelves,
-          "shelfCount": estimate.rows.count,
+          "shelfCount": shelfCount,
+          "lyingCount": lyingCount,
+          "usedGravity": usedGravity,
           "imageId": UUID().uuidString,
           "elapsedMs": shot.elapsedMs,
           "photoWidth": CVPixelBufferGetWidth(shot.buffer),

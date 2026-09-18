@@ -13,6 +13,7 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
   private let camera = CameraSession()
   private let gate = FrameGate()
   private let transform = FrameTransform()
+  let attitude = DeviceAttitude()
   private let telemetry = Telemetry()
   let results = ResultStore()
 
@@ -77,6 +78,7 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
     camera.delegate = self
     try camera.configure(minSide: engine?.inputWidth ?? 640)
     camera.start()
+    attitude.start()
 
     startedAt = Date()
     lastSampleAt = startedAt
@@ -121,6 +123,8 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
   }
 
   var isRunning: Bool { camera.isRunning }
+
+  var fieldOfView: Double { camera.fieldOfView }
 
   func capturePhoto() async throws -> (buffer: CVPixelBuffer, elapsedMs: Double) {
     statsLock.lock()

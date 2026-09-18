@@ -213,6 +213,10 @@ export type CaptureResult = {
   }[];
   /** Fileiras detectadas, inclusive as curtas demais para entrar na geometria. */
   shelfCount: number;
+  /** Objetos que não estão em pé: contados e marcados, fora da geometria. */
+  lyingCount: number;
+  /** `true` quando a vertical veio da gravidade, não das lombadas. */
+  usedGravity: boolean;
   /**
    * **Identificador, não pixels.** A foto em resolução máxima fica no nativo;
    * atravessar a fronteira com ela violaria o princípio II num caso em que
