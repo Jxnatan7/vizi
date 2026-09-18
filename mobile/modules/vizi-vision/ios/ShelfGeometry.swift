@@ -21,9 +21,24 @@ enum ShelfGeometry {
     var bottomRight: CGPoint
   }
 
+  /// Uma fileira de livros. Prateleiras de uma estante são **coplanares**,
+  /// então todas são retificadas pela MESMA homografia — e duas ou mais retas
+  /// de base dão o ponto de fuga horizontal por medição, em vez de suposição.
+  struct Row {
+    var indices: [Int]
+    var slope: Double
+    var intercept: Double
+    /// Altura da fileira ao longo do eixo das lombadas.
+    var level: Double
+    /// Fileiras curtas contam livros mas não entram na estimativa: duas bases
+    /// dão uma reta frágil, que contaminaria a homografia.
+    var usedForGeometry: Bool
+  }
+
   struct Estimate {
     var quad: Quad?
     var confidence: Double
+    var rows: [Row] = []
     /// Texto para a tela, não para o log: "Poucos livros para estimar a
     /// perspectiva" diz o que fazer diferente; "confiança 0.31" não diz nada.
     var declineReason: String?
@@ -47,21 +62,63 @@ enum ShelfGeometry {
     minConfidence: Double
   ) -> Estimate {
     guard instances.count >= minInstances else {
-      return Estimate(quad: nil, confidence: 0,
+      return Estimate(quad: nil, confidence: 0, rows: [],
                       declineReason: "Poucos livros para estimar a perspectiva (\(instances.count))")
     }
 
     let spines = instances.compactMap { spine(for: $0, protos: protos, imageSide: imageSide) }
     guard spines.count >= minInstances else {
-      return Estimate(quad: nil, confidence: 0,
+      return Estimate(quad: nil, confidence: 0, rows: [],
                       declineReason: "Não foi possível medir a inclinação das lombadas")
     }
 
-    // Reta das bases: y = a·x + b, por mínimos quadrados.
-    let bases = spines.map { $0.base }
-    guard let (slope, intercept, residual) = fitLine(bases) else {
-      return Estimate(quad: nil, confidence: 0,
-                      declineReason: "As bases dos livros não formam uma linha")
+    // ── Agrupar em fileiras ───────────────────────────────────────────────
+    //
+    // Uma reta única através das bases de duas prateleiras passa no meio das
+    // duas e não descreve nenhuma. Antes de ajustar qualquer reta, é preciso
+    // saber quem está em que fileira.
+    //
+    // Projetar a base de cada livro no eixo médio das lombadas dá a "altura"
+    // de cada um. Agrupar nessa única dimensão, cortando onde houver vão maior
+    // que meia altura de livro.
+    let meanAxis = averageAxis(spines)
+    let levels = spines.map { Double($0.base.x) * meanAxis.dx + Double($0.base.y) * meanAxis.dy }
+    let heights = spines.map { hypot(Double($0.top.x - $0.base.x), Double($0.top.y - $0.base.y)) }
+    let medianHeight = heights.sorted()[heights.count / 2]
+    let gapThreshold = max(medianHeight * 0.5, Double(imageSide) * 0.02)
+
+    let order = levels.indices.sorted { levels[$0] < levels[$1] }
+    var groups: [[Int]] = []
+    var current: [Int] = []
+    for (k, idx) in order.enumerated() {
+      if k > 0, levels[idx] - levels[order[k - 1]] > gapThreshold {
+        groups.append(current); current = []
+      }
+      current.append(idx)
+    }
+    if !current.isEmpty { groups.append(current) }
+
+    // ── Uma reta por fileira ──────────────────────────────────────────────
+    let minPerRow = 3
+    var rows: [Row] = []
+    var residuals: [Double] = []
+
+    for g in groups {
+      let pts = g.map { spines[$0].base }
+      let level = g.map { levels[$0] }.reduce(0, +) / Double(g.count)
+      if g.count >= minPerRow, let (a, b, r) = fitLine(pts) {
+        rows.append(Row(indices: g, slope: a, intercept: b, level: level, usedForGeometry: true))
+        residuals.append(r)
+      } else {
+        // Conta os livros, mas não entra na geometria.
+        rows.append(Row(indices: g, slope: 0, intercept: 0, level: level, usedForGeometry: false))
+      }
+    }
+
+    let usable = rows.filter { $0.usedForGeometry }
+    guard let lowest = usable.min(by: { $0.level < $1.level }) else {
+      return Estimate(quad: nil, confidence: 0, rows: rows,
+                      declineReason: "Nenhuma fileira com livros suficientes para estimar a perspectiva")
     }
 
     // Consistência das lombadas: se apontam para direções muito diferentes, ou
@@ -70,45 +127,70 @@ enum ShelfGeometry {
     let meanAngle = angles.reduce(0, +) / Double(angles.count)
     let angleSpread = angles.map { abs($0 - meanAngle) }.max() ?? .pi
 
-    // Confiança: três sinais, todos entre 0 e 1.
+    // Consistência entre fileiras: as retas convergem no ponto de fuga, então
+    // as inclinações são parecidas. Muito diferentes indica agrupamento errado.
+    let slopeSpread: Double
+    if usable.count >= 2 {
+      let s = usable.map(\.slope)
+      slopeSpread = (s.max() ?? 0) - (s.min() ?? 0)
+    } else {
+      slopeSpread = 0
+    }
+
+    let avgResidual = residuals.isEmpty ? .infinity : residuals.reduce(0, +) / Double(residuals.count)
     let countScore = min(1.0, Double(spines.count) / 12.0)
-    let lineScore = max(0, 1 - residual / (Double(imageSide) * 0.02))
-    let spreadScore = max(0, 1 - angleSpread / 0.5)   // ~29° de dispersão zera
-    let confidence = countScore * 0.2 + lineScore * 0.4 + spreadScore * 0.4
+    let lineScore = max(0, 1 - avgResidual / (Double(imageSide) * 0.02))
+    let spreadScore = max(0, 1 - angleSpread / 0.5)
+    let rowScore = max(0, 1 - slopeSpread / 0.3)
+    let confidence = countScore * 0.15 + lineScore * 0.35 + spreadScore * 0.30 + rowScore * 0.20
 
     guard confidence >= minConfidence else {
-      return Estimate(quad: nil, confidence: confidence,
+      return Estimate(quad: nil, confidence: confidence, rows: rows,
                       declineReason: "Geometria pouco confiável — tente de frente para a estante")
     }
 
-    // O quadrilátero: bases na reta ajustada, topos deslocados pela altura de
-    // cada lombada nas pontas.
+    // ── O quadrilátero cobre a estante inteira ────────────────────────────
+    //
+    // Base na reta da fileira MAIS BAIXA, topo no ponto mais alto de qualquer
+    // livro. Uma homografia só, porque as prateleiras são coplanares.
     let sorted = spines.sorted { $0.center.x < $1.center.x }
     guard let left = sorted.first, let right = sorted.last else {
-      return Estimate(quad: nil, confidence: confidence, declineReason: "Sem extremos")
+      return Estimate(quad: nil, confidence: confidence, rows: rows, declineReason: "Sem extremos")
     }
 
-    let onLine = { (x: Double) in CGPoint(x: x, y: slope * x + intercept) }
+    let onLine = { (x: Double) in
+      CGPoint(x: x, y: lowest.slope * x + lowest.intercept)
+    }
     let leftBase = onLine(Double(left.center.x) - left.halfWidth)
     let rightBase = onLine(Double(right.center.x) + right.halfWidth)
 
-    let leftHeight = hypot(Double(left.top.x - left.base.x), Double(left.top.y - left.base.y))
-    let rightHeight = hypot(Double(right.top.x - right.base.x), Double(right.top.y - right.base.y))
+    // Altura total: da base da fileira mais baixa ao topo mais alto.
+    let topLevels = spines.map { Double($0.top.x) * meanAxis.dx + Double($0.top.y) * meanAxis.dy }
+    let totalHeight = (topLevels.max() ?? 0) - lowest.level
 
     let quad = Quad(
-      topLeft: CGPoint(x: leftBase.x + left.axis.dx * leftHeight,
-                       y: leftBase.y + left.axis.dy * leftHeight),
-      topRight: CGPoint(x: rightBase.x + right.axis.dx * rightHeight,
-                        y: rightBase.y + right.axis.dy * rightHeight),
+      topLeft: CGPoint(x: leftBase.x + left.axis.dx * totalHeight,
+                       y: leftBase.y + left.axis.dy * totalHeight),
+      topRight: CGPoint(x: rightBase.x + right.axis.dx * totalHeight,
+                        y: rightBase.y + right.axis.dy * totalHeight),
       bottomLeft: leftBase,
       bottomRight: rightBase)
 
     guard isSane(quad, imageSide: imageSide) else {
-      return Estimate(quad: nil, confidence: confidence,
+      return Estimate(quad: nil, confidence: confidence, rows: rows,
                       declineReason: "O quadrilátero estimado não faz sentido")
     }
 
-    return Estimate(quad: quad, confidence: confidence, declineReason: nil)
+    return Estimate(quad: quad, confidence: confidence, rows: rows, declineReason: nil)
+  }
+
+  /// Eixo médio das lombadas, normalizado.
+  private static func averageAxis(_ spines: [Spine]) -> CGVector {
+    var sx = 0.0, sy = 0.0
+    for s in spines { sx += s.axis.dx; sy += s.axis.dy }
+    let n = hypot(sx, sy)
+    guard n > 1e-9 else { return CGVector(dx: 0, dy: -1) }
+    return CGVector(dx: sx / n, dy: sy / n)
   }
 
   // MARK: - PCA de uma máscara

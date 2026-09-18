@@ -185,7 +185,7 @@ public class ViziVisionModule: Module {
         var straightened = false
         var declineReason = "sem protótipos de máscara"
         var confidence = 0.0
-        var dividers: [Double] = []
+        var shelves: [[String: Any]] = []
         var displayBuffer = square
 
         if let protos = result.protos {
@@ -201,11 +201,13 @@ public class ViziVisionModule: Module {
 
           if let quad = estimate.quad,
              let out = Rectify.straighten(
-               photo: shot.buffer, quad: quad, instances: result.instances,
-               imageSide: side, margin: options.cropMargin),
+               photo: shot.buffer, quad: quad, rows: estimate.rows,
+               instances: result.instances, imageSide: side, margin: options.cropMargin),
              let rendered = Rectify.render(out.image, context: self.ciContext) {
             displayBuffer = rendered
-            dividers = out.dividers
+            shelves = out.shelves.map {
+              ["count": $0.count, "dividers": $0.dividers, "top": $0.top, "bottom": $0.bottom]
+            }
             straightened = true
           } else if estimate.quad != nil {
             // O quadrilátero existia mas o warp falhou: recusar é desfecho
@@ -232,7 +234,8 @@ public class ViziVisionModule: Module {
           "straightened": straightened,
           "declineReason": declineReason,
           "geometryConfidence": confidence,
-          "dividers": dividers,
+          "shelves": shelves,
+          "shelfCount": estimate.rows.count,
           "imageId": UUID().uuidString,
           "elapsedMs": shot.elapsedMs,
           "photoWidth": CVPixelBufferGetWidth(shot.buffer),

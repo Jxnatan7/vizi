@@ -5,10 +5,19 @@ import Foundation
 /// Aplica a correção de perspectiva e recorta a faixa de livros.
 enum Rectify {
 
+  /// Uma fileira no resultado retificado.
+  struct Shelf {
+    var count: Int
+    /// Divisões entre livros, normalizadas de 0 a 1 na largura.
+    var dividers: [Double]
+    /// Banda vertical que a fileira ocupa, normalizada de 0 a 1.
+    var top: Double
+    var bottom: Double
+  }
+
   struct Output {
     var image: CIImage
-    /// Posições das divisões entre livros, normalizadas de 0 a 1 na largura.
-    var dividers: [Double]
+    var shelves: [Shelf]
   }
 
   /// Resolve a homografia que leva `src` em `dst` — DLT de 4 pontos.
@@ -54,12 +63,12 @@ enum Rectify {
 
   /// - Parameters:
   ///   - photo: a foto original, em qualquer orientação
-  ///   - quad: o quadrilátero, no espaço canônico de `imageSide`
-  ///   - instances: para calcular as divisões
-  ///   - margin: fração da altura da faixa, acrescentada em volta
+  ///   - quad: o quadrilátero da estante inteira, no espaço canônico
+  ///   - rows: as fileiras, para divisões e bandas
   static func straighten(
     photo: CVPixelBuffer,
     quad: ShelfGeometry.Quad,
+    rows: [ShelfGeometry.Row],
     instances: [Instance],
     imageSide: Int,
     margin: Double
@@ -71,8 +80,8 @@ enum Rectify {
     image = image.transformed(by: CGAffineTransform(
       translationX: -image.extent.minX, y: -image.extent.minY))
 
-    // Canônico (640×640) → foto normalizada. A transformação é esticamento
-    // alinhado aos eixos, então basta escalar cada coordenada.
+    // Canônico (640×640) → foto normalizada. Esticamento alinhado aos eixos,
+    // então basta escalar cada coordenada.
     let sx = image.extent.width / CGFloat(imageSide)
     let sy = image.extent.height / CGFloat(imageSide)
     let toPhoto = { (p: CGPoint) in CGPoint(x: p.x * sx, y: p.y * sy) }
@@ -93,39 +102,48 @@ enum Rectify {
     let w = corrected.extent.width, h = corrected.extent.height
     guard w > 1, h > 1 else { return nil }
 
-    // A mesma homografia, calculada por nós, para mapear as fronteiras.
+    // A mesma homografia, calculada por nós, para mapear fronteiras e bandas.
     let dst = [CGPoint(x: 0, y: h), CGPoint(x: w, y: h),
                CGPoint(x: w, y: 0), CGPoint(x: 0, y: 0)]
-    let dividers: [Double]
+    var shelves: [Shelf] = []
+
     if let hm = homography(from: src, to: dst) {
-      // Fronteira entre livros adjacentes: o meio do vão entre eles.
-      let ordered = instances.sorted { $0.x < $1.x }
-      var cuts: [Double] = []
-      for i in 0..<max(0, ordered.count - 1) {
-        let edge = Double(ordered[i].x + ordered[i].width + ordered[i + 1].x) / 2
-        let base = CGPoint(x: CGFloat(edge), y: quadBaseY(quad, atX: CGFloat(edge)))
-        let mapped = apply(hm, to: flip(toPhoto(base)))
-        let t = Double(mapped.x / w)
-        if t > 0.01, t < 0.99 { cuts.append(t) }
+      let project = { (p: CGPoint) in apply(hm, to: flip(toPhoto(p))) }
+
+      // Fileiras de baixo para cima na imagem viram de cima para baixo aqui.
+      for row in rows.sorted(by: { $0.level > $1.level }) {
+        let members = row.indices.compactMap { instances.indices.contains($0) ? instances[$0] : nil }
+        guard !members.isEmpty else { continue }
+        let ordered = members.sorted { $0.x < $1.x }
+
+        var cuts: [Double] = []
+        for i in 0..<max(0, ordered.count - 1) {
+          let edge = CGFloat(ordered[i].x + ordered[i].width + ordered[i + 1].x) / 2
+          let y = row.usedForGeometry
+            ? CGFloat(row.slope * Double(edge) + row.intercept)
+            : CGFloat(ordered[i].y + ordered[i].height)
+          let t = Double(project(CGPoint(x: edge, y: y)).x / w)
+          if t > 0.01, t < 0.99 { cuts.append(t) }
+        }
+
+        // Banda vertical: do topo mais alto à base mais baixa da fileira.
+        let topY = CGFloat(members.map(\.y).min() ?? 0)
+        let bottomY = CGFloat(members.map { $0.y + $0.height }.max() ?? 0)
+        let midX = CGFloat(members.map { $0.x + $0.width / 2 }.reduce(0, +)) / CGFloat(members.count)
+        let topN = 1 - Double(project(CGPoint(x: midX, y: topY)).y / h)
+        let bottomN = 1 - Double(project(CGPoint(x: midX, y: bottomY)).y / h)
+
+        shelves.append(Shelf(count: members.count, dividers: cuts,
+                             top: min(topN, bottomN), bottom: max(topN, bottomN)))
       }
-      dividers = cuts
-    } else {
-      dividers = []
     }
 
     // Recorte com margem, sobre o resultado já retificado.
     let inset = CGFloat(margin) * h
     corrected = corrected.cropped(to: corrected.extent.insetBy(dx: -inset, dy: -inset))
-    return Output(image: corrected, dividers: dividers)
+    return Output(image: corrected, shelves: shelves)
   }
 
-  /// Altura da reta das bases no x dado, interpolando entre os cantos.
-  private static func quadBaseY(_ q: ShelfGeometry.Quad, atX x: CGFloat) -> CGFloat {
-    let x0 = q.bottomLeft.x, x1 = q.bottomRight.x
-    guard abs(x1 - x0) > 1e-6 else { return q.bottomLeft.y }
-    let t = (x - x0) / (x1 - x0)
-    return q.bottomLeft.y + (q.bottomRight.y - q.bottomLeft.y) * t
-  }
 }
 
 extension Rectify {

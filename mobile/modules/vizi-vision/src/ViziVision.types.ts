@@ -198,8 +198,21 @@ export type CaptureResult = {
   /** Texto legível quando a correção foi recusada — FR-011. */
   declineReason: string;
   geometryConfidence: number;
-  /** Posições das divisões, normalizadas de 0 a 1. */
-  dividers: number[];
+  /**
+   * Uma entrada por fileira. Prateleiras de uma estante são coplanares, então
+   * todas vêm da MESMA homografia — e duas ou mais retas de base dão o ponto
+   * de fuga por medição, em vez de suposição.
+   */
+  shelves: {
+    count: number;
+    /** Divisões entre livros, normalizadas de 0 a 1 na largura. */
+    dividers: number[];
+    /** Banda vertical da fileira, normalizada de 0 a 1. */
+    top: number;
+    bottom: number;
+  }[];
+  /** Fileiras detectadas, inclusive as curtas demais para entrar na geometria. */
+  shelfCount: number;
   /**
    * **Identificador, não pixels.** A foto em resolução máxima fica no nativo;
    * atravessar a fronteira com ela violaria o princípio II num caso em que
