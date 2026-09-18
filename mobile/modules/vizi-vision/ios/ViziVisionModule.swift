@@ -213,27 +213,62 @@ public class ViziVisionModule: Module {
             minInstances: options.minInstancesForGeometry,
             minConfidence: options.minGeometryConfidence)
 
-          confidence = estimate.confidence
           declineReason = estimate.declineReason ?? ""
           shelfCount = estimate.rows.count
           lyingCount = estimate.lying.count
           usedGravity = estimate.usedGravity
 
-          if let quad = estimate.quad,
-             let out = Rectify.straighten(
-               photo: shot.buffer, quad: quad, rows: estimate.rows,
-               instances: result.instances, imageSide: side, margin: options.cropMargin),
-             let rendered = Rectify.render(out.image, context: self.ciContext) {
-            displayBuffer = rendered
-            shelves = out.shelves.map {
-              ["count": $0.count, "dividers": $0.dividers, "top": $0.top, "bottom": $0.bottom]
-            }
-            straightened = true
-          } else if estimate.quad != nil {
-            // O quadrilátero existia mas o warp falhou: recusar é desfecho
-            // válido, não erro (FR-011).
-            declineReason = "não foi possível aplicar a correção"
+          // ── Retificação pelo PLANO, não pelos objetos ──────────────────
+          //
+          // A gravidade dá a vertical; a busca de azimute dá a horizontal,
+          // usando as bordas da foto inteira. Os livros só definem o recorte.
+          var portrait = CIImage(cvPixelBuffer: shot.buffer)
+          if portrait.extent.width > portrait.extent.height {
+            portrait = portrait.oriented(.right)
           }
+          portrait = portrait.transformed(by: CGAffineTransform(
+            translationX: -portrait.extent.minX, y: -portrait.extent.minY))
+
+          // Canônico (640×640) → retrato. Esticamento alinhado aos eixos.
+          let kx = portrait.extent.width / CGFloat(side)
+          let ky = portrait.extent.height / CGFloat(side)
+          let region = result.instances.flatMap { inst -> [CGPoint] in
+            [CGPoint(x: CGFloat(inst.x) * kx, y: CGFloat(inst.y) * ky),
+             CGPoint(x: CGFloat(inst.x + inst.width) * kx,
+                     y: CGFloat(inst.y + inst.height) * ky)]
+          }
+
+          var azimuthConfidence = 0.0
+          var horizontalVP: Projective.H?
+          if let g = gravity {
+            if let found = AzimuthSearch.search(
+              portrait: portrait, gravity: g,
+              fieldOfViewDegrees: self.coordinator.fieldOfView,
+              context: self.ciContext), found.confidence >= 0.15 {
+              horizontalVP = found.vanishingPoint
+              azimuthConfidence = found.confidence
+            }
+
+            if !region.isEmpty,
+               let out = PlaneRectifier.rectify(
+                 portrait: portrait, gravity: g, horizontalVP: horizontalVP,
+                 region: region, fieldOfViewDegrees: self.coordinator.fieldOfView,
+                 margin: options.cropMargin),
+               let rendered = Rectify.render(out.image, context: self.ciContext) {
+              displayBuffer = rendered
+              straightened = out.fullyRectified
+              declineReason = out.fullyRectified
+                ? ""
+                : "perspectiva não estimada — só a rotação foi corrigida"
+            }
+          } else {
+            declineReason = "sem leitura de gravidade"
+          }
+
+          shelves = estimate.rows.map {
+            ["count": $0.indices.count, "dividers": [Double](), "top": 0.0, "bottom": 0.0]
+          }
+          confidence = azimuthConfidence
         }
 
         // Uma imagem na tela, e as detecções são dela. Endireitada quando deu
