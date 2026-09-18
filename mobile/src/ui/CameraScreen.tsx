@@ -121,7 +121,8 @@ export default function CameraScreen() {
             <Row c={c} label="deitados" value={String(result.lyingCount)} />
             <Row c={c} label="prateleiras" value={String(result.shelfCount)} strong />
             {result.shelves.map((sh, i) => (
-              <Row key={i} c={c} label={`fileira ${i + 1}`}
+              <Row key={i} c={c}
+                label={`fileira ${i + 1} · banda ${(sh.top * 100).toFixed(0)}–${(sh.bottom * 100).toFixed(0)}%`}
                 value={`${sh.count} livros · ${sh.dividers.length} divisões`} />
             ))}
           </Card>

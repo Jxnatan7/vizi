@@ -21,6 +21,21 @@ enum PlaneRectifier {
     /// Qual guarda disparou, quando houve recuo. Sem isto, "não endireitou"
     /// tem cinco causas possíveis com o mesmo sintoma.
     var fallbackReason: String?
+    /// Retângulo do recorte no espaço retificado. Com ele e a `transform`,
+    /// qualquer ponto da foto vira coordenada normalizada do resultado — é o
+    /// que permite posicionar as divisões.
+    var cropLeft = 0.0
+    var cropRight = 0.0
+    var cropTop = 0.0
+    var cropBottom = 0.0
+
+    /// Ponto da foto → coordenada de 0 a 1 no resultado.
+    func normalize(_ p: CGPoint) -> CGPoint? {
+      guard let r = PlaneRectifier.apply(transform, p) else { return nil }
+      let dx = cropRight - cropLeft, dy = cropBottom - cropTop
+      guard abs(dx) > 1e-9, abs(dy) > 1e-9 else { return nil }
+      return CGPoint(x: (Double(r.x) - cropLeft) / dx, y: (Double(r.y) - cropTop) / dy)
+    }
   }
 
   /// - Parameters:
@@ -170,7 +185,9 @@ enum PlaneRectifier {
     }
 
     return Output(image: out, fullyRectified: true, transform: hMat,
-                  sourceQuad: source, verticalVP: verticalVP, fallbackReason: nil)
+                  sourceQuad: source, verticalVP: verticalVP, fallbackReason: nil,
+                  cropLeft: Double(leftX), cropRight: Double(rightX),
+                  cropTop: Double(topY), cropBottom: Double(bottomY))
   }
 
   /// Recuo: só deixa a imagem em pé, usando a gravidade.

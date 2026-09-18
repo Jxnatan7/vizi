@@ -198,6 +198,7 @@ public class ViziVisionModule: Module {
         /// `return`. Três erros de compilação seguidos vieram de variáveis de
         /// resultado nascendo em escopo mais interno do que onde são lidas.
         var azimuthScores: [Double] = []
+        var rowsForShelves: [ShelfGeometry.Row] = []
         var displayBuffer = square
 
         if let protos = result.protos {
@@ -318,6 +319,47 @@ public class ViziVisionModule: Module {
                 displayBuffer = rendered
                 imageReplaced = true
               }
+
+              // ── Divisões e bandas, no espaço do RESULTADO ────────────────
+              //
+              // Cada fronteira entre livros é mapeada pela mesma transformação
+              // que produziu a imagem, e normalizada pelo retângulo do
+              // recorte. Sem isso as divisões ficariam em coordenadas de outro
+              // espaço — que foi o motivo de elas terem ficado zeradas desde a
+              // reestruturação.
+              if out.fullyRectified, !rowsForShelves.isEmpty {
+                let toPhoto = { (x: Float, y: Float) in
+                  CGPoint(x: CGFloat(x) * kx, y: CGFloat(y) * ky)
+                }
+                shelves = rowsForShelves.compactMap { row in
+                  let members = row.indices.compactMap {
+                    result.instances.indices.contains($0) ? result.instances[$0] : nil
+                  }
+                  guard !members.isEmpty else { return nil }
+                  let ordered = members.sorted { $0.x < $1.x }
+
+                  var cuts: [Double] = []
+                  for i in 0..<max(0, ordered.count - 1) {
+                    let a = ordered[i], b = ordered[i + 1]
+                    let edgeX = (a.x + a.width + b.x) / 2
+                    let baseY = max(a.y + a.height, b.y + b.height)
+                    if let n = out.normalize(toPhoto(edgeX, baseY)),
+                       n.x > 0.01, n.x < 0.99 {
+                      cuts.append(Double(n.x))
+                    }
+                  }
+
+                  let topY = members.map(\.y).min() ?? 0
+                  let bottomY = members.map { $0.y + $0.height }.max() ?? 0
+                  let midX = members.map { $0.x + $0.width / 2 }.reduce(0, +) / Float(members.count)
+                  let nTop = out.normalize(toPhoto(midX, topY))?.y ?? 0
+                  let nBottom = out.normalize(toPhoto(midX, bottomY))?.y ?? 0
+
+                  return ["count": members.count, "dividers": cuts,
+                          "top": min(Double(nTop), Double(nBottom)),
+                          "bottom": max(Double(nTop), Double(nBottom))]
+                }
+              }
             }
           } else {
             declineReason = "sem leitura de gravidade"
@@ -326,6 +368,7 @@ public class ViziVisionModule: Module {
           shelves = estimate.rows.map {
             ["count": $0.indices.count, "dividers": [Double](), "top": 0.0, "bottom": 0.0]
           }
+          rowsForShelves = estimate.rows
           confidence = azimuthConfidence
         }
 
