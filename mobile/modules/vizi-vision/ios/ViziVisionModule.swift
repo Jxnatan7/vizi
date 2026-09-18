@@ -194,6 +194,10 @@ public class ViziVisionModule: Module {
         /// O overlay precisa ser limpo sempre que a imagem exibida deixar de
         /// ser a canônica — não só quando houver endireitamento. Girada conta.
         var imageReplaced = false
+        /// Declarada aqui, e não dentro do `if let protos`, porque é usada no
+        /// `return`. Três erros de compilação seguidos vieram de variáveis de
+        /// resultado nascendo em escopo mais interno do que onde são lidas.
+        var azimuthScores: [Double] = []
         var displayBuffer = square
 
         if let protos = result.protos {
@@ -245,7 +249,6 @@ public class ViziVisionModule: Module {
 
           var azimuthConfidence = 0.0
           var horizontalVP: Projective.H?
-          var azimuthScores: [Double] = []
           let halfFov = self.coordinator.fieldOfView * .pi / 360
           let fPortrait = halfFov > 1e-6
             ? Double(max(portrait.extent.width, portrait.extent.height)) / 2 / tan(halfFov)
