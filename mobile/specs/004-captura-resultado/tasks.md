@@ -63,13 +63,13 @@ Caminhos relativos a `mobile/`.
 
 **Independent Test**: fotografar de ângulo e conferir se as lombadas ficam verticais.
 
-- [ ] T014 [US2] Criar `ShelfGeometry.swift`: PCA por máscara, eixo principal e extremos — resolve **R14**
-- [ ] T015 [US2] Ajustar retas às nuvens de topos e bases, e fechar o quadrilátero
-- [ ] T016 [US2] Calcular a confiança a partir dos cinco sinais — resolve **R15**
+- [x] T014 [US2] Criar `ShelfGeometry.swift`: PCA por máscara, eixo principal e extremos — resolve **R14** — PCA por máscara, autovetor 2×2 em forma fechada
+- [x] T015 [US2] Ajustar retas às nuvens de topos e bases, e fechar o quadrilátero — reta das **bases** por mínimos quadrados; topos NÃO são usados (alturas variam por natureza)
+- [x] T016 [US2] Calcular a confiança a partir dos cinco sinais — resolve **R15** — três sinais: contagem, resíduo da reta e dispersão das lombadas
 - [ ] T017 [US2] Desenhar o quadrilátero estimado sobre a foto, como ferramenta de diagnóstico
-- [ ] T018 [US2] Derivar a homografia e aplicá-la ao recorte
-- [ ] T019 [US2] Recusar abaixo do limiar, com motivo legível para a tela (**FR-011**)
-- [ ] T020 [US2] Desenhar as divisões entre objetos adjacentes (**FR-008**)
+- [x] T018 [US2] Derivar a homografia e aplicá-la ao recorte — `CIPerspectiveCorrection` para a imagem, DLT próprio para mapear pontos
+- [x] T019 [US2] Recusar abaixo do limiar, com motivo legível para a tela (**FR-011**) — recusa com motivo legível; a imagem canônica é exibida mesmo assim
+- [x] T020 [US2] Desenhar as divisões entre objetos adjacentes (**FR-008**) — fronteiras mapeadas pela homografia, normalizadas de 0 a 1
 - [ ] T021 [US2] Arrasto horizontal quando a faixa não couber (**FR-015**)
 - [ ] T022 [US2] 🚦 Verificar **SC-003**: lombadas verticais com desvio < 3° a até 30° de ângulo
 - [ ] T023 [US2] 🚦 Verificar **SC-006**: forçar casos ruins e confirmar que **recusa em vez de errar**

@@ -1,3 +1,4 @@
+import CoreImage
 import ExpoModulesCore
 import Foundation
 import UIKit
@@ -45,6 +46,8 @@ struct SessionOptions: Record {
 public class ViziVisionModule: Module {
   private let engine = InferenceEngine()
   private let coordinator = SessionCoordinator()
+  /// Usado só na captura, uma vez. Não está no caminho quente.
+  private let ciContext = CIContext(options: [.cacheIntermediates: false])
 
   public func definition() -> ModuleDefinition {
     Name("ViziVision")
@@ -177,18 +180,59 @@ public class ViziVisionModule: Module {
         // As detecções da FOTO substituem as do último frame ao vivo. As
         // coordenadas são comparáveis: as duas passaram pela mesma
         // transformação para 640×640.
-        // A imagem canônica da foto substitui o frame congelado. A partir
-        // daqui há UMA imagem na tela, e as detecções são dela.
-        PreviewSink.shared.showStill(square)
-        self.coordinator.results.publishOverriding(instances: result.instances, protos: result.protos)
+        // Geometria da estante, a partir das MÁSCARAS. Caixa alinhada aos
+        // eixos não informa inclinação.
+        var straightened = false
+        var declineReason = "sem protótipos de máscara"
+        var confidence = 0.0
+        var dividers: [Double] = []
+        var displayBuffer = square
+
+        if let protos = result.protos {
+          let estimate = ShelfGeometry.estimate(
+            instances: result.instances,
+            protos: protos,
+            imageSide: side,
+            minInstances: options.minInstancesForGeometry,
+            minConfidence: options.minGeometryConfidence)
+
+          confidence = estimate.confidence
+          declineReason = estimate.declineReason ?? ""
+
+          if let quad = estimate.quad,
+             let out = Rectify.straighten(
+               photo: shot.buffer, quad: quad, instances: result.instances,
+               imageSide: side, margin: options.cropMargin),
+             let rendered = Rectify.render(out.image, context: self.ciContext) {
+            displayBuffer = rendered
+            dividers = out.dividers
+            straightened = true
+          } else if estimate.quad != nil {
+            // O quadrilátero existia mas o warp falhou: recusar é desfecho
+            // válido, não erro (FR-011).
+            declineReason = "não foi possível aplicar a correção"
+          }
+        }
+
+        // Uma imagem na tela, e as detecções são dela. Endireitada quando deu
+        // para endireitar; a canônica quando não deu.
+        PreviewSink.shared.showStill(displayBuffer)
+
+        // O overlay ao vivo não vale sobre a imagem endireitada — as
+        // coordenadas são de outro espaço. Limpa em vez de desenhar errado.
+        if straightened {
+          self.coordinator.results.publishOverriding(instances: [], protos: nil)
+        } else {
+          self.coordinator.results.publishOverriding(
+            instances: result.instances, protos: result.protos)
+        }
 
         return [
           "count": result.instances.count,
-          // Endireitamento entra na fase 4 (T014–T019).
-          "straightened": false,
-          "declineReason": "endireitamento ainda não implementado",
-          "geometryConfidence": 0.0,
-          "dividers": [Double](),
+          "straightened": straightened,
+          "declineReason": declineReason,
+          "geometryConfidence": confidence,
+          "dividers": dividers,
           "imageId": UUID().uuidString,
           "elapsedMs": shot.elapsedMs,
           "photoWidth": CVPixelBufferGetWidth(shot.buffer),
