@@ -76,8 +76,12 @@ enum PlaneRectifier {
 
     // Os quatro cantos do recorte, trazidos de volta à foto. É exatamente o
     // que o CIPerspectiveCorrection espera: um quadrilátero na origem.
-    let corners = [CGPoint(x: minX, y: minY), CGPoint(x: maxX, y: minY),
-                   CGPoint(x: maxX, y: maxY), CGPoint(x: minX, y: maxY)]
+    //
+    // **No espaço retificado o +y aponta para CIMA no mundo**, porque (0,1,0)
+    // foi mapeado no ponto de fuga vertical. Então `maxY` é o topo e `minY` é
+    // a base — trocar isso entrega a imagem de cabeça para baixo.
+    let corners = [CGPoint(x: minX, y: maxY), CGPoint(x: maxX, y: maxY),
+                   CGPoint(x: maxX, y: minY), CGPoint(x: minX, y: minY)]
     let source = corners.compactMap { apply(m, $0) }
     guard source.count == 4 else {
       return rotationOnly(image: image, gravity: g, region: region, margin: margin)
@@ -110,8 +114,10 @@ enum PlaneRectifier {
     region: [CGPoint], margin: Double
   ) -> Output? {
     let h = image.extent.height
-    // Ângulo entre a gravidade projetada e o "para baixo" da imagem.
-    let angle = atan2(g.x, g.y)
+    // A gravidade vem em coordenadas de imagem (y para baixo); o CIImage tem y
+    // para cima. Convertida, queremos girar até ela apontar para (0, -1).
+    let gci = (x: g.x, y: -g.y)
+    let angle = -Double.pi / 2 - atan2(gci.y, gci.x)
     let rot = CGAffineTransform(rotationAngle: CGFloat(angle))
     let rotated = image.transformed(by: rot)
 
