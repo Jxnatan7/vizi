@@ -104,14 +104,38 @@ enum PlaneRectifier {
     let mx = (maxX - minX) * margin, my = (maxY - minY) * margin
     minX -= mx; maxX += mx; minY -= my; maxY += my
 
-    // Os quatro cantos do recorte, trazidos de volta à foto. É exatamente o
-    // que o CIPerspectiveCorrection espera: um quadrilátero na origem.
+    // ── Orientação dos eixos, descoberta por medição ──────────────────────
     //
-    // **No espaço retificado o +y aponta para CIMA no mundo**, porque (0,1,0)
-    // foi mapeado no ponto de fuga vertical. Então `maxY` é o topo e `minY` é
-    // a base — trocar isso entrega a imagem de cabeça para baixo.
-    let corners = [CGPoint(x: minX, y: maxY), CGPoint(x: maxX, y: maxY),
-                   CGPoint(x: maxX, y: minY), CGPoint(x: minX, y: minY)]
+    // O sinal de um ponto de fuga vindo de produto vetorial é **arbitrário**:
+    // ele pode apontar para a esquerda ou para a direita conforme a reta foi
+    // representada. Raciocinar sobre esses sinais já produziu imagem de cabeça
+    // para baixo e depois espelhada.
+    //
+    // Em vez disso: mapear pontos cuja ordem na foto eu conheço, e ver para
+    // onde foram. Autocorretivo nos dois eixos.
+    guard let photoLeft = region.min(by: { $0.x < $1.x }),
+          let photoRight = region.max(by: { $0.x < $1.x }),
+          let photoTop = region.min(by: { $0.y < $1.y }),
+          let photoBottom = region.max(by: { $0.y < $1.y }),
+          let mLeft = apply(hMat, photoLeft), let mRight = apply(hMat, photoRight),
+          let mTop = apply(hMat, photoTop), let mBottom = apply(hMat, photoBottom)
+    else {
+      return rotationOnly(image: image, gravity: g, region: region, margin: margin,
+                          reason: "não foi possível medir a orientação dos eixos")
+    }
+
+    // O eixo x do espaço retificado cresce para a direita da foto?
+    let xGrowsRight = mRight.x >= mLeft.x
+    // E o y cresce para baixo? (a foto tem y para baixo)
+    let yGrowsDown = mBottom.y >= mTop.y
+
+    let leftX = xGrowsRight ? minX : maxX
+    let rightX = xGrowsRight ? maxX : minX
+    let topY = yGrowsDown ? minY : maxY
+    let bottomY = yGrowsDown ? maxY : minY
+
+    let corners = [CGPoint(x: leftX, y: topY), CGPoint(x: rightX, y: topY),
+                   CGPoint(x: rightX, y: bottomY), CGPoint(x: leftX, y: bottomY)]
     let source = corners.compactMap { apply(m, $0) }
     guard source.count == 4 else {
       return rotationOnly(image: image, gravity: g, region: region, margin: margin)
