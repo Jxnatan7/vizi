@@ -84,7 +84,7 @@ Caminhos relativos a `mobile/`.
 - [x] T021 [US2] [P] Criar `mobile/src/telemetry/exportSession.ts`: sessão → JSON → área de transferência — `exportSession.ts`; avalia o portão e copia o JSON
 - [x] T022 [US2] Exibir a sessão em andamento na `CameraScreen` — veredito do portão, transições térmicas e botão de cópia
 - [x] T023 [US2] Parar captura e inferência ao sair de primeiro plano, retomar ao voltar (**FR-010**) — `AppState`: sai de primeiro plano, câmera desliga
-- [~] T024 [US2] 🚦 **Sessão de 3,6 min medida** (não 10): SC-001, SC-002, SC-003 e SC-005 passam com folga. **SC-007 não mensurável** nessa duração, e a sessão foi em **Debug**. Repetir em Release e por mais tempo antes de declarar fechado
+- [x] T024 [US2] 🚦 **PORTÃO ATINGIDO** — sessão de 5,6 min em Release, com 22 capturas, 19321 de 19321 frames: SC-001 a SC-003 e SC-005 passam sem degradação, e o **SC-007 finalmente tem número**: 53 pontos de bateria por hora. Medição em `specs/004-captura-resultado/medicoes/`
 
 **Checkpoint**: existe resposta sobre sustentação. É o propósito do marco.
 

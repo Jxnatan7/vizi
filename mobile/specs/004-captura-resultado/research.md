@@ -4,6 +4,46 @@ Quatro incógnitas. A R15 é a que decide se o marco entrega algo confiável.
 
 ---
 
+## MEDIÇÃO — 5,6 min, 22 capturas, Release ✅
+
+`medicoes/2026-09-17-canonico-22-capturas.json`. **19321 de 19321 frames.**
+
+| | início | fim | |
+|---|---|---|---|
+| inferência | 6,60 ms | 6,46 ms | −2,0% |
+| transformação | 1,45 ms | 1,46 ms | +0,3% |
+| desenho | 1,50 ms | 1,30 ms | −12,8% |
+| ponta-a-ponta | 36,38 ms | 34,53 ms | −5,1% |
+| fps | 60,00 | 60,00 | 0,0% |
+
+Térmico `nominal` do início ao fim. **Nenhum número piorou.**
+
+**21 das 22 capturas são invisíveis na telemetria** — só a de 283,7 s deixou
+marca (52 fps na janela). A troca de formato, a foto de 12 MP e a volta
+acontecem sem que a sessão perceba.
+
+### Bateria — a primeira medição real do projeto
+
+**5 pontos em 5,6 minutos**, ou cerca de **53 pontos por hora**. É consumo alto:
+câmera a 60 fps, inferência a cada frame, mais 22 capturas de 12 MP. Um app
+assim esvazia a bateria em menos de duas horas de uso contínuo.
+
+Não é defeito — é o preço de inferir a cada frame, que foi decisão consciente do
+marco 2 com a promessa de medir depois. **Está medido.** E é o primeiro
+argumento concreto a favor de limitar a cadência, que até agora não tinha
+nenhum: o térmico nunca reclamou e a latência nunca cresceu.
+
+### O que esta sessão fecha de outros marcos
+
+| | |
+|---|---|
+| M2 · SC-001 térmico | ✅ `nominal` em 5,6 min |
+| M2 · SC-002 latência | ✅ −2,0% |
+| M2 · SC-003 fps | ✅ 0,0% |
+| M2 · SC-005 e2e | ✅ 35,9 ms |
+| M2 · SC-007 bateria | ✅ **medida** — 53 pontos/hora |
+| M4 · T007 câmera volta | ✅ confirmado 22 vezes, não uma |
+
 ## REESTRUTURAÇÃO — espaço canônico, 17/09/2026
 
 **O sintoma.** A foto saía em 4032×3024 (paisagem), o frame de vídeo em
