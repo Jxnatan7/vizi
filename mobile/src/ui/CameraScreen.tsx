@@ -115,6 +115,7 @@ export default function CameraScreen() {
             <Row c={c} label="livros" value={String(result.count)} strong />
             <Row c={c} label="foto" value={`${result.photoWidth}×${result.photoHeight}`} />
             <Row c={c} label="tempo" value={`${result.elapsedMs.toFixed(0)} ms`} strong />
+            <Row c={c} label="toque → pronto" value={`${result.readyMs.toFixed(0)} ms`} strong />
             <Row c={c} label="endireitado" value={result.straightened ? 'sim' : `não — ${result.declineReason}`} />
             <Row c={c} label="azimute · confiança" value={result.geometryConfidence.toFixed(3)} />
             <Row c={c} label="vertical" value={result.usedGravity ? 'gravidade' : 'lombadas (recuo)'} />

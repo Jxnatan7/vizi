@@ -13,7 +13,8 @@ saveResult(): Promise<HistoryEntry>
 | `cropMargin` | margem em volta da faixa, como fração |
 | `minInstancesForGeometry` | abaixo disto, nem tenta endireitar |
 | `minGeometryConfidence` | 0 a 1 |
-| `transitionMs` | duração da animação |
+| `approachMs` | aproximação que começa no toque, antes da foto (FR-009) |
+| `transitionMs` | endireitamento, a partir do resultado pronto, e a volta |
 
 ## `CaptureResult` — o que atravessa
 
@@ -25,7 +26,8 @@ saveResult(): Promise<HistoryEntry>
 | `geometryConfidence` | 0 a 1, para diagnóstico |
 | `dividers` | posições das divisões, normalizadas de 0 a 1 |
 | `imageId` | **identificador, não pixels** |
-| `elapsedMs` | do toque ao resultado, para o SC-001 |
+| `elapsedMs` | só a foto: troca de formato, captura e restauração |
+| `readyMs` | do toque ao resultado pronto; o final aparece em `readyMs + transitionMs` (SC-001) |
 
 **`imageId` é o ponto deste contrato.** A foto em resolução máxima são dezenas
 de megabytes. Ela fica no nativo; o JavaScript recebe um identificador e a view

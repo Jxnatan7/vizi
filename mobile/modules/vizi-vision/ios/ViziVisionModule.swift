@@ -23,6 +23,9 @@ struct CaptureOptions: Record {
   @Field var cropMargin: Double = 0.05
   @Field var minInstancesForGeometry: Int = 5
   @Field var minGeometryConfidence: Double = 0.6
+  /// Aproximação no toque, antes de a foto existir (FR-009).
+  @Field var approachMs: Int = 700
+  /// Endireitamento, depois que o resultado existe — e a volta.
   @Field var transitionMs: Int = 600
   /// Mostra o que o algoritmo inferiu em vez do resultado. Política em TS.
   @Field var diagnostics: Bool = false
@@ -50,6 +53,9 @@ public class ViziVisionModule: Module {
   private let coordinator = SessionCoordinator()
   /// Usado só na captura, uma vez. Não está no caminho quente.
   private let ciContext = CIContext(options: [.cacheIntermediates: false])
+  /// A volta usa a duração que a captura recebeu: `dismissResult` não tem
+  /// opções, e a política continua vindo do TypeScript.
+  private var transitionMs = 0
 
   public func definition() -> ModuleDefinition {
     Name("ViziVision")
@@ -163,12 +169,30 @@ public class ViziVisionModule: Module {
     // MARK: - Captura (marco 4)
 
     AsyncFunction("capture") { (options: CaptureOptions) -> [String: Any] in
+      let touchedAt = CFAbsoluteTimeGetCurrent()
+      self.transitionMs = options.transitionMs
+
       // Congela ANTES de qualquer reconfiguração: a tela precisa segurar a
       // última imagem enquanto o formato é trocado (FR-009).
       // Congela imagem E overlay juntos. Separá-los mostraria caixas de um
       // frame sobre a imagem de outro.
-      PreviewSink.shared.frozen = true
+      let frozen = PreviewSink.shared.freeze()
       self.coordinator.results.setPaused(true)
+
+      // A transição começa AQUI, antes da foto (FR-009): o frame congelado se
+      // aproxima dos objetos que estavam na tela. O destino exato só existe
+      // depois do resultado, e a segunda metade parte de onde esta estiver.
+      if let frozen {
+        let still = CIImage(cvPixelBuffer: frozen)
+        if let image = self.ciContext.createCGImage(still, from: still.extent) {
+          let focus = ViziVisionModule.focus(
+            of: self.coordinator.results.read().instances,
+            side: Double(self.engine.inputWidth), margin: options.cropMargin)
+          PreviewSink.shared.onView {
+            $0.result.begin(frame: image, focus: focus, durationMs: options.approachMs)
+          }
+        }
+      }
 
       do {
         let shot = try await self.coordinator.capturePhoto()
@@ -200,6 +224,9 @@ public class ViziVisionModule: Module {
         var azimuthScores: [Double] = []
         var rowsForShelves: [ShelfGeometry.Row] = []
         var displayBuffer = square
+        /// Onde o recorte exibido estava no frame, normalizado. Vazio quando o
+        /// que aparece é o frame inteiro — e a transição só se acomoda nele.
+        var transitionQuad: [CGPoint] = []
 
         if let protos = result.protos {
           // A atitude é amostrada NO disparo, não depois: medir a inclinação
@@ -326,6 +353,10 @@ public class ViziVisionModule: Module {
               } else {
                 displayBuffer = rendered
                 imageReplaced = true
+                if out.sourceQuad.count == 4 {
+                  let pw = portrait.extent.width, ph = portrait.extent.height
+                  transitionQuad = out.sourceQuad.map { CGPoint(x: $0.x / pw, y: $0.y / ph) }
+                }
               }
 
               // ── Divisões e bandas, no espaço do RESULTADO ────────────────
@@ -389,6 +420,23 @@ public class ViziVisionModule: Module {
             instances: result.instances, protos: result.protos)
         }
 
+        // Segunda metade da transição. Ela termina exatamente sobre a imagem
+        // que acabou de ir para a tela, por baixo dela (FR-010).
+        let shown = CGSize(width: CVPixelBufferGetWidth(displayBuffer),
+                           height: CVPixelBufferGetHeight(displayBuffer))
+        // `let`, não `var`: ela é capturada por um bloco que roda em outra
+        // thread.
+        let destination: ResultRenderer.Destination
+        if transitionQuad.count == 4,
+           let image = self.screenImage(displayBuffer, fitting: PreviewSink.shared.stagePixels) {
+          destination = .cutout(image, quad: transitionQuad, size: shown)
+        } else {
+          destination = .whole(size: shown)
+        }
+        PreviewSink.shared.onView {
+          $0.result.settle(destination, durationMs: options.transitionMs)
+        }
+
         return [
           "count": result.instances.count,
           "straightened": straightened,
@@ -401,11 +449,13 @@ public class ViziVisionModule: Module {
           "azimuthScores": azimuthScores,
           "imageId": UUID().uuidString,
           "elapsedMs": shot.elapsedMs,
+          "readyMs": (CFAbsoluteTimeGetCurrent() - touchedAt) * 1000,
           "photoWidth": CVPixelBufferGetWidth(shot.buffer),
           "photoHeight": CVPixelBufferGetHeight(shot.buffer),
           "instances": result.instances.count,
         ]
       } catch {
+        PreviewSink.shared.onView { $0.result.teardown() }
         PreviewSink.shared.frozen = false
         self.coordinator.results.setPaused(false)
         throw error
@@ -413,8 +463,17 @@ public class ViziVisionModule: Module {
     }
 
     AsyncFunction("dismissResult") {
-      self.coordinator.results.setPaused(false)
-      PreviewSink.shared.frozen = false
+      // A câmera volta por baixo; a transição se desfaz por cima (T029).
+      //
+      // Descongela na thread de interface, DEPOIS de a transição reaparecer.
+      // Daqui, um frame ao vivo podia chegar à tela antes dela e piscar sobre
+      // o resultado. Sem view, descongela do mesmo jeito.
+      let duration = self.transitionMs
+      DispatchQueue.main.async {
+        PreviewSink.shared.view?.result.dismiss(durationMs: duration)
+        self.coordinator.results.setPaused(false)
+        PreviewSink.shared.frozen = false
+      }
     }
 
     AsyncFunction("setOverlayStyle") { (record: OverlayStyleRecord) in
@@ -446,5 +505,38 @@ public class ViziVisionModule: Module {
     OnDestroy {
       _ = self.coordinator.stop()
     }
+  }
+
+  // MARK: - Transição
+
+  /// A região dos objetos ao vivo, normalizada, com a mesma margem do recorte.
+  ///
+  /// É a melhor previsão do destino que existe no instante do toque. Errar
+  /// um pouco não custa nada: a segunda metade parte de onde esta parar.
+  private static func focus(of instances: [Instance], side: Double, margin: Double) -> CGRect? {
+    guard side > 0, !instances.isEmpty else { return nil }
+    let minX = Double(instances.map(\.x).min()!)
+    let minY = Double(instances.map(\.y).min()!)
+    let maxX = Double(instances.map { $0.x + $0.width }.max()!)
+    let maxY = Double(instances.map { $0.y + $0.height }.max()!)
+    let mx = (maxX - minX) * margin, my = (maxY - minY) * margin
+    let r = CGRect(x: (minX - mx) / side, y: (minY - my) / side,
+                   width: (maxX - minX + 2 * mx) / side, height: (maxY - minY + 2 * my) / side)
+    return r.width > 0 && r.height > 0 ? r : nil
+  }
+
+  /// O resultado no tamanho em que ele vai aparecer, não no da foto.
+  private func screenImage(_ buffer: CVPixelBuffer, fitting pixels: CGSize) -> CGImage? {
+    let image = CIImage(cvPixelBuffer: buffer)
+    let w = image.extent.width, h = image.extent.height
+    guard w > 0, h > 0 else { return nil }
+    let scale = pixels.width > 0 && pixels.height > 0
+      ? min(1, pixels.width / w, pixels.height / h) : 1
+    let scaled = scale < 1
+      ? image.applyingFilter("CILanczosScaleTransform", parameters: [
+          kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1,
+        ])
+      : image
+    return ciContext.createCGImage(scaled, from: scaled.extent.integral)
   }
 }

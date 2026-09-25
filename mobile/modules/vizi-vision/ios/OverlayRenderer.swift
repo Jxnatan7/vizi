@@ -103,6 +103,10 @@ final class OverlayRenderer {
   private var link: CADisplayLink?
   private var lastGeneration: UInt64 = .max
 
+  /// Enquanto emprestado à transição, o overlay não redesenha: dentro do
+  /// cartão, ele tem de continuar mostrando as caixas do frame congelado.
+  var isHeld = false
+
   /// Uma sublayer por caixa. Uma `CAShapeLayer` única tem uma só `strokeColor`,
   /// e o FR-004 pede cor distinta por objeto vizinho.
   ///
@@ -116,9 +120,13 @@ final class OverlayRenderer {
     maskLayer.contentsGravity = .resize
   }
 
-  func attach(to host: CALayer) {
-    host.addSublayer(maskLayer)
-    host.addSublayer(boxLayer)   // caixas por cima das máscaras
+  func attach(to host: CALayer, above sibling: CALayer? = nil) {
+    if let sibling {
+      host.insertSublayer(maskLayer, above: sibling)
+    } else {
+      host.addSublayer(maskLayer)
+    }
+    host.insertSublayer(boxLayer, above: maskLayer)   // caixas por cima das máscaras
   }
 
   func layout(_ bounds: CGRect) {
@@ -142,8 +150,16 @@ final class OverlayRenderer {
     maskLayer.contents = nil
   }
 
+  /// Solta e redesenha já, na transação de quem soltou. Esperar o próximo
+  /// tique deixaria um quadro com as caixas antigas sobre a imagem nova.
+  func resumeDrawing() {
+    isHeld = false
+    lastGeneration = .max
+    tick()
+  }
+
   @objc private func tick() {
-    guard let store else { return }
+    guard !isHeld, let store else { return }
     let snapshot = store.read()
     // Nada novo desde o último desenho: não há por que repintar.
     guard snapshot.generation != lastGeneration else { return }

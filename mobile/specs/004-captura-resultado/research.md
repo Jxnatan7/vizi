@@ -137,6 +137,20 @@ parâmetros (ângulo, escala, translação) e remontar a matriz por quadro.
 **Como fechar.** Olhar. Se a animação acelerar ou torcer de forma estranha no
 meio, é isso.
 
+**O que foi feito (2026-09-24).** Nem decomposição, nem interpolação da matriz.
+A 3×3 cabe inteira na `CATransform3D` — a terceira linha da homografia vai para
+`m14`, `m24` e `m44` —, e o que se interpola são os **quatro cantos**, cada um
+em linha reta. A homografia de cada instante sai dos cantos, um quadro-chave
+por quadro de tela; entre dois vizinhos, a interpolação do Core Animation não
+tem espaço para torcer.
+
+A camada animada é **o próprio resultado**, deformado de volta ao quadrilátero
+do recorte. No último quadro a transformação é só uma translação, e a troca
+pela camada de vídeo, com a mesma imagem por baixo, não tem o que mostrar
+(FR-010).
+
+**Ainda falta olhar**, que é como este item fecha — na T030.
+
 ---
 
 ## R17 — Trocar de formato sem quebrar a sessão

@@ -189,6 +189,9 @@ export type CaptureOptions = {
   cropMargin: number;
   minInstancesForGeometry: number;
   minGeometryConfidence: number;
+  /** Aproximação que começa no toque, antes de a foto existir (FR-009). */
+  approachMs: number;
+  /** Endireitamento, depois que o resultado existe — e a volta. */
   transitionMs: number;
   /** Mostra o que o algoritmo inferiu em vez do resultado. */
   diagnostics: boolean;
@@ -230,7 +233,14 @@ export type CaptureResult = {
    * seria tentador — é só uma imagem, e é só uma vez.
    */
   imageId: string;
+  /** Só a foto: troca de formato, captura e restauração. */
   elapsedMs: number;
+  /**
+   * Do toque ao resultado pronto. O endireitamento começa aqui, então o
+   * resultado final aparece em `readyMs + transitionMs` — é isso que o SC-001
+   * limita a 1,5 s.
+   */
+  readyMs: number;
   photoWidth: number;
   photoHeight: number;
 };

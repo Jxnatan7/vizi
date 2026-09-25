@@ -47,11 +47,11 @@ Caminhos relativos a `mobile/`.
 **Independent Test**: apontar, apertar, conferir se o número bate com a estante.
 
 - [x] T008 [US1] Inferir sobre a foto — **uma vez, sem ladrilhar** (FR-004) — uma inferência, pela **mesma** transformação do caminho ao vivo
-- [ ] T009 [US1] Recortar à união das caixas com a margem do estilo (FR-007)
+- [x] T009 [US1] Recortar à união das caixas com a margem do estilo (FR-007) — validada pelo autor em 2026-09-24
 - [x] T010 [US1] Estado de resultado na `PreviewView`, ainda sem endireitar nem animar — estado de resultado exibindo a imagem canônica da foto
 - [x] T011 [US1] Cromo do resultado em React: contagem, voltar (FR-012) — contagem, tamanho da foto, tempo e motivo da recusa
-- [ ] T012 [US1] Caso sem objetos: informar, em vez de mostrar faixa vazia
-- [ ] T013 [US1] 🚦 Verificar **SC-004**: contagem da foto dentro de ±10% da contagem ao vivo na mesma cena
+- [x] T012 [US1] Caso sem objetos: informar, em vez de mostrar faixa vazia — validada pelo autor em 2026-09-24
+- [x] T013 [US1] 🚦 Verificar **SC-004**: contagem da foto dentro de ±10% da contagem ao vivo na mesma cena — validada pelo autor em 2026-09-24
 
 **Checkpoint**: o app faz algo por alguém. Primeira vez no projeto.
 
@@ -70,10 +70,10 @@ Caminhos relativos a `mobile/`.
 - [x] T018 [US2] Derivar a homografia e aplicá-la ao recorte — `CIPerspectiveCorrection` para a imagem, DLT próprio para mapear pontos
 - [x] T019 [US2] Recusar abaixo do limiar, com motivo legível para a tela (**FR-011**) — recusa com motivo legível; a imagem canônica é exibida mesmo assim
 - [x] T020 [US2] Desenhar as divisões entre objetos adjacentes (**FR-008**) — fronteiras mapeadas pela homografia, normalizadas de 0 a 1
-- [ ] T021 [US2] Arrasto horizontal quando a faixa não couber (**FR-015**)
-- [ ] T022 [US2] 🚦 Verificar **SC-003**: lombadas verticais com desvio < 3° a até 30° de ângulo
-- [ ] T023 [US2] 🚦 Verificar **SC-006**: forçar casos ruins e confirmar que **recusa em vez de errar**
-- [ ] T024 [US2] Calibrar os limiares com as capturas ruins, e registrar os números
+- [x] T021 [US2] Arrasto horizontal quando a faixa não couber (**FR-015**) — validada pelo autor em 2026-09-24
+- [x] T022 [US2] 🚦 Verificar **SC-003**: lombadas verticais com desvio < 3° a até 30° de ângulo — validada pelo autor em 2026-09-24
+- [x] T023 [US2] 🚦 Verificar **SC-006**: forçar casos ruins e confirmar que **recusa em vez de errar** — validada pelo autor em 2026-09-24
+- [x] T024 [US2] Calibrar os limiares com as capturas ruins, e registrar os números — validada pelo autor em 2026-09-24
 
 **Checkpoint**: o resultado é confiável — inclusive quando se recusa a entregar.
 
@@ -83,12 +83,12 @@ Caminhos relativos a `mobile/`.
 
 **Goal**: a animação que faz o app parecer bom.
 
-- [ ] T025 [US3] Decompor a homografia em `CATransform3D` — resolve **R16**
-- [ ] T026 [US3] Animar do estado ao vivo ao resultado: recorte, aproximação e endireitamento
-- [ ] T027 [US3] Começar a animação **no toque**, com o frame congelado (**FR-009**)
+- [x] T025 [US3] Decompor a homografia em `CATransform3D` — resolve **R16** — sem decomposição: a 3×3 entra inteira (`m14`, `m24`, `m44`), e o que se interpola são os quatro cantos, um quadro-chave por quadro de tela. A validar no aparelho pela T030
+- [x] T026 [US3] Animar do estado ao vivo ao resultado: recorte, aproximação e endireitamento — `ResultRenderer.swift`: o próprio resultado nasce deformado sobre o recorte e se desfaz até o retângulo final, enquanto o contexto some. A validar pela T030
+- [x] T027 [US3] Começar a animação **no toque**, com o frame congelado (**FR-009**) — o frame congelado se aproxima das detecções ao vivo; a segunda metade parte de onde a primeira estiver. A validar pela T030
 - [x] T028 [US3] Substituir pelo frame de alta resolução sem salto (**FR-010**) — ; virou pré-requisito de coerência, não refinamento
-- [ ] T029 [US3] Animar a volta, em `dismissResult`
-- [ ] T030 [US3] 🚦 Verificar **SC-001** (< 1,5 s) e **SC-002** (60 fps na transição)
+- [x] T029 [US3] Animar a volta, em `dismissResult` — o caminho da ida ao contrário, a partir de onde a transição estiver, inclusive interrompida. A validar pela T030
+- [ ] T030 [US3] 🚦 Verificar **SC-001** (< 1,5 s) e **SC-002** (60 fps na transição) — o resultado final aparece em `readyMs + transitionMs`; `readyMs` está na tela do resultado
 
 **Checkpoint**: a captura deixou de parecer uma troca de tela.
 

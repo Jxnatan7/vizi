@@ -17,6 +17,17 @@ export const DEFAULT_CAPTURE: CaptureOptions = {
   /** Endireitar errado é pior que não endireitar — daí o limiar alto. */
   minGeometryConfidence: 0.6,
 
+  /**
+   * Aproximação no toque, antes de a foto existir (FR-009). Da ordem de
+   * `readyMs`: mais curta, a imagem para e espera; mais longa, ainda está se
+   * movendo quando o endireitamento começa.
+   */
+  approachMs: 700,
+
+  /**
+   * Endireitamento, a partir do resultado pronto, e a volta à câmera. Soma-se
+   * a `readyMs` no SC-001.
+   */
   transitionMs: 600,
 
   /**

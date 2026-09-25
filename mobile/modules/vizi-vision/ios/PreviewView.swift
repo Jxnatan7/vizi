@@ -18,6 +18,13 @@ final class PreviewView: ExpoView {
   /// publicado — nunca esperando um novo (princípio I).
   let overlay = OverlayRenderer()
 
+  /// A transição e o estado de resultado. A view não troca de tela: ela se
+  /// transforma no resultado (plano, "Structure Decision").
+  private(set) lazy var result = ResultRenderer(host: self)
+
+  /// Durante a transição, o overlay vive dentro do cartão que se aproxima.
+  private var overlayLent = false
+
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     displayLayer.videoGravity = .resizeAspect
@@ -35,7 +42,32 @@ final class PreviewView: ExpoView {
   override func layoutSubviews() {
     super.layoutSubviews()
     displayLayer.frame = bounds
+    // Emprestado ao cartão, o overlay está no espaço dele, não no da view.
+    if !overlayLent { overlay.layout(bounds) }
+    let scale = max(1, traitCollection.displayScale)
+    PreviewSink.shared.stagePixels = CGSize(
+      width: bounds.width * scale, height: bounds.height * scale)
+  }
+
+  /// O overlay entra no cartão da transição e se aproxima junto com a imagem.
+  func lendOverlay(to card: CALayer, origin: CGPoint) {
+    guard !overlayLent else { return }
+    overlayLent = true
+    overlay.isHeld = true
+    for layer in [overlay.maskLayer, overlay.boxLayer] {
+      let frame = layer.frame.offsetBy(dx: -origin.x, dy: -origin.y)
+      card.addSublayer(layer)
+      layer.frame = frame
+    }
+  }
+
+  /// Devolve o overlay à view, por baixo da transição, e redesenha na hora.
+  func reclaimOverlay() {
+    guard overlayLent else { return }
+    overlayLent = false
+    overlay.attach(to: layer, above: displayLayer)
     overlay.layout(bounds)
+    overlay.resumeDrawing()
   }
 
   /// Chamado da fila da câmera, não da thread de interface.
@@ -101,6 +133,19 @@ final class PreviewSink {
   /// permite a animação começar imediatamente, sem esperar a foto (FR-009).
   var frozen = false
 
+  private let frameLock = NSLock()
+  /// O último frame exibido. É dele que a transição parte.
+  private var lastFrame: CVPixelBuffer?
+  private var _stagePixels = CGSize.zero
+
+  /// Tamanho da view em pixels. A imagem que a transição anima é reduzida a
+  /// isto: o resultado inteiro seriam dezenas de megabytes numa camada, para
+  /// desenhar algo do tamanho da tela.
+  var stagePixels: CGSize {
+    get { frameLock.lock(); defer { frameLock.unlock() }; return _stagePixels }
+    set { frameLock.lock(); _stagePixels = newValue; frameLock.unlock() }
+  }
+
   /// Diagnóstico: sem console no aparelho, saber se o overlay está ligado e
   /// quantas instâncias ele desenhou é a diferença entre ver e adivinhar.
   var isAttached: Bool { view != nil }
@@ -109,7 +154,28 @@ final class PreviewSink {
 
   func push(_ buffer: CVPixelBuffer) {
     guard !frozen else { return }
+    frameLock.lock()
+    lastFrame = buffer
+    frameLock.unlock()
     view?.enqueue(buffer)
+  }
+
+  /// Congela e devolve o frame que ficou na tela.
+  func freeze() -> CVPixelBuffer? {
+    frozen = true
+    frameLock.lock(); defer { frameLock.unlock() }
+    return lastFrame
+  }
+
+  /// Executa na view, na thread de interface, se ela existir.
+  ///
+  /// A captura roda fora da thread de interface e a view pode nem ter
+  /// nascido; quem chama não precisa saber de nenhuma das duas coisas.
+  func onView(_ body: @escaping (PreviewView) -> Void) {
+    DispatchQueue.main.async { [weak self] in
+      guard let view = self?.view else { return }
+      body(view)
+    }
   }
 
   /// Exibe uma imagem parada, ignorando o congelamento.

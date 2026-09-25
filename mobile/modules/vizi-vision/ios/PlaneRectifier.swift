@@ -14,7 +14,9 @@ enum PlaneRectifier {
     var fullyRectified: Bool
     /// Mapeia do espaço da foto em retrato para o resultado.
     var transform: [Double]
-    /// Onde o recorte caiu na foto original. Só para diagnóstico.
+    /// Onde o recorte caiu na foto original, na ordem dos cantos do
+    /// resultado: topo-esquerdo, topo-direito, base-direita, base-esquerda.
+    /// O diagnóstico o desenha; a transição parte dele.
     var sourceQuad: [CGPoint]
     /// Ponto de fuga vertical usado, para diagnóstico.
     var verticalVP: Projective.H?
@@ -215,10 +217,20 @@ enum PlaneRectifier {
 
     let crop = rotated.cropped(to: CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY))
     guard crop.extent.width > 1, crop.extent.height > 1 else { return nil }
+
+    // Os cantos do recorte, de volta à foto. Da extensão real, não do
+    // retângulo pedido: a borda da imagem pode ter limitado o recorte. O topo
+    // do resultado é o `maxY` do Core Image, que tem y para cima.
+    let inverse = rot.inverted()
+    let e = crop.extent
+    let source = [CGPoint(x: e.minX, y: e.maxY), CGPoint(x: e.maxX, y: e.maxY),
+                  CGPoint(x: e.maxX, y: e.minY), CGPoint(x: e.minX, y: e.minY)]
+      .map { flip($0.applying(inverse)) }
+
     return Output(image: crop, fullyRectified: false,
                   transform: [Double(rot.a), Double(rot.c), Double(rot.tx),
                               Double(rot.b), Double(rot.d), Double(rot.ty), 0, 0, 1],
-                  sourceQuad: [], verticalVP: nil, fallbackReason: reason)
+                  sourceQuad: source, verticalVP: nil, fallbackReason: reason)
   }
 
   // MARK: - Matriz 3×3
