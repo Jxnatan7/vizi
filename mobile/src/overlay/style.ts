@@ -23,4 +23,10 @@ export const DEFAULT_OVERLAY: OverlayStyle = {
 
   /** Atribuída por posição no nativo — ver R11. */
   palette: ['#4AC79E', '#FAB554', '#6BA6F5', '#F2757F', '#BA94F0', '#66D9DE'],
+
+  /** Divisões entre livros sobre o resultado endireitado (FR-008). */
+  showDividers: true,
+  dividerColor: '#FFFFFF',
+  /** Pontos de tela, não pixels do modelo: o resultado tem outro tamanho. */
+  dividerWidth: 2,
 };

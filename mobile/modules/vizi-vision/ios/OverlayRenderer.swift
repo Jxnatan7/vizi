@@ -13,6 +13,11 @@ struct OverlayStyle {
   var maskOpacity: CGFloat = 0.45
   var minConfidence: Float = 0.3
   var palette: [CGColor] = OverlayStyle.defaultPalette
+  /// As divisões entre livros sobre o resultado (FR-008). A espessura é em
+  /// pontos de tela: o resultado não está no espaço do modelo.
+  var showDividers = true
+  var dividerColor: CGColor = UIColor.white.cgColor
+  var dividerWidth: CGFloat = 2
 
   static let defaultPalette: [CGColor] = [
     UIColor(red: 0.29, green: 0.78, blue: 0.62, alpha: 1).cgColor,

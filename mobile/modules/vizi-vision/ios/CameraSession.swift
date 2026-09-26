@@ -87,6 +87,15 @@ final class CameraSession: NSObject {
     }) else { throw CameraError.noSuitableFormat(minSide: minSide) }
 
     session.beginConfiguration()
+
+    // A sessão é uma só para a vida do módulo, e `stop` só a para — não a
+    // desmonta. Uma segunda sessão na mesma execução reencontraria a entrada e
+    // as saídas da anterior: o `canAddInput` recusa o mesmo aparelho, e o
+    // segundo `startSession` falharia. Trocar de aba desmonta a câmera, então
+    // bastaria ir ao histórico e voltar. (Achado na leitura, não no aparelho.)
+    for input in session.inputs { session.removeInput(input) }
+    for output in session.outputs { session.removeOutput(output) }
+
     // inputPriority: mandamos no formato, a sessão não sobrepõe com um preset.
     session.sessionPreset = .inputPriority
 

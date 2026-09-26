@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
@@ -20,8 +20,16 @@ export default function CameraScreen() {
   const c = dark ? colors.dark : colors.light;
   const { info, sample, session, error, transform, overlay, start, stop, setTransform, setOverlay } = useSession();
   const [copied, setCopied] = useState(false);
-  const { state, result, error: captureError, capture, dismiss, diagnostics, setDiagnostics } = useCapture();
+  const {
+    state, result, error: captureError, capture, dismiss, diagnostics, setDiagnostics,
+    save, saving, saved, saveError, reset,
+  } = useCapture();
   const verdicts = useMemo(() => (session ? evaluateGate(session) : []), [session]);
+
+  // A sessão parou com o resultado na tela: o nativo já o desfez.
+  useEffect(() => {
+    if (!info) reset();
+  }, [info, reset]);
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: c.bg }]}>
@@ -61,7 +69,10 @@ export default function CameraScreen() {
 
         {info && (
           <View style={styles.modes}>
-            {([['showBoxes', 'caixas'], ['showMasks', 'máscaras']] as const).map(([key, label]) => (
+            {TOGGLES
+              // As divisões só existem sobre o resultado endireitado.
+              .filter(([key]) => key !== 'showDividers' || state === 'result')
+              .map(([key, label]) => (
               <Pressable
                 key={key}
                 onPress={() => setOverlay({ [key]: !overlay[key] })}
@@ -117,7 +128,8 @@ export default function CameraScreen() {
             <Row c={c} label="tempo" value={`${result.elapsedMs.toFixed(0)} ms`} strong />
             <Row c={c} label="toque → pronto" value={`${result.readyMs.toFixed(0)} ms`} strong />
             <Row c={c} label="endireitado" value={result.straightened ? 'sim' : `não — ${result.declineReason}`} />
-            <Row c={c} label="azimute · confiança" value={result.geometryConfidence.toFixed(3)} />
+            <Row c={c} label="geometria · confiança" value={result.geometryConfidence.toFixed(3)} />
+            <Row c={c} label="azimute · confiança" value={result.azimuthConfidence.toFixed(3)} />
             <Row c={c} label="vertical" value={result.usedGravity ? 'gravidade' : 'lombadas (recuo)'} />
             <Row c={c} label="deitados" value={String(result.lyingCount)} />
             <Row c={c} label="prateleiras" value={String(result.shelfCount)} strong />
@@ -130,7 +142,17 @@ export default function CameraScreen() {
         )}
 
         {state === 'result' && (
-          <Button c={c} onPress={dismiss} disabled={false} title="Voltar à câmera" />
+          <>
+            <Button c={c} onPress={save} disabled={saving || saved !== null}
+              title={saved ? 'Salvo no histórico ✓' : saving ? 'Salvando…' : 'Salvar no histórico'} />
+            <Button c={c} onPress={dismiss} disabled={false} title="Voltar à câmera" />
+          </>
+        )}
+
+        {saveError && (
+          <Card c={c} border={c.crit} label="ERRO AO SALVAR">
+            <Text style={{ color: c.ink, fontFamily: 'Menlo', fontSize: 13 }}>{saveError}</Text>
+          </Card>
         )}
 
         {captureError && (
@@ -206,6 +228,13 @@ export default function CameraScreen() {
     </SafeAreaView>
   );
 }
+
+/** Camadas desenhadas sobre a imagem. O estilo de cada uma é do `OverlayStyle`. */
+const TOGGLES = [
+  ['showBoxes', 'caixas'],
+  ['showMasks', 'máscaras'],
+  ['showDividers', 'divisões'],
+] as const;
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },

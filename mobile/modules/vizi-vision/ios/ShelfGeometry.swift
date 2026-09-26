@@ -64,12 +64,47 @@ enum ShelfGeometry {
     var halfWidth: Double
   }
 
-  /// Tolerância para considerar uma lombada "em pé".
+  /// Política da estimativa. Vem do TypeScript, em `CaptureOptions.geometry`
+  /// — princípio IV. São os números que decidem o que conta como em pé, o que
+  /// é uma fileira e quanto a geometria merece de confiança.
   ///
-  /// Só é mensurável porque a gravidade dá referência absoluta. Sem ela, a
-  /// única saída seria inferir pela maioria — circular quando metade dos
-  /// objetos está deitada.
-  private static let standingToleranceRadians = 25.0 * .pi / 180
+  /// Os limites que protegem a conta de entrada degenerada — mínimo de pixels
+  /// para o PCA, quadrilátero sem área, extrapolação — ficam no Swift: não
+  /// escolhem entre dois desfechos válidos, só impedem um inválido.
+  struct Tuning {
+    /// Tolerância para considerar uma lombada "em pé".
+    ///
+    /// Só é mensurável porque a gravidade dá referência absoluta. Sem ela, a
+    /// única saída seria inferir pela maioria — circular quando metade dos
+    /// objetos está deitada.
+    var standingToleranceRadians: Double
+    /// Vão que separa duas fileiras, como fração da altura mediana dos livros.
+    var rowGapFactor: Double
+    /// Piso desse vão, como fração do lado da imagem.
+    var minRowGap: Double
+    /// Fileiras menores contam livros mas não entram na estimativa.
+    var minBooksPerRow: Int
+    /// Livros em pé que dão nota máxima ao sinal de contagem.
+    var fullConfidenceCount: Double
+    /// Resíduo médio das bases que zera o sinal da reta, como fração do lado.
+    var maxBaseResidual: Double
+    /// Dispersão angular das lombadas, em radianos, que zera o sinal.
+    var maxAngleSpread: Double
+    /// Diferença de inclinação entre fileiras que zera o sinal.
+    var maxRowSlopeSpread: Double
+    /// Com gravidade a vertical não é estimativa, então a dispersão das
+    /// lombadas pesa menos e a qualidade das retas, mais.
+    var withGravity: Weights
+    var withoutGravity: Weights
+  }
+
+  /// Peso de cada sinal na confiança (R15).
+  struct Weights {
+    var count: Double
+    var line: Double
+    var spread: Double
+    var rows: Double
+  }
 
   static func estimate(
     instances: [Instance],
@@ -78,7 +113,8 @@ enum ShelfGeometry {
     gravity: DeviceAttitude.Gravity?,
     focal: Projective.Focal,
     minInstances: Int,
-    minConfidence: Double
+    minConfidence: Double,
+    tuning: Tuning
   ) -> Estimate {
     guard instances.count >= minInstances else {
       return Estimate(quad: nil, confidence: 0, rows: [], lying: [], usedGravity: gravity != nil,
@@ -133,7 +169,7 @@ enum ShelfGeometry {
       }
       let dot = Double(s.axis.dx) * ex + Double(s.axis.dy) * ey
       // O eixo do PCA não tem sentido definido; o que importa é o alinhamento.
-      if acos(min(1, max(-1, abs(dot)))) <= standingToleranceRadians {
+      if acos(min(1, max(-1, abs(dot)))) <= tuning.standingToleranceRadians {
         standingIdx.append(i)
       } else {
         lyingIdx.append(i)
@@ -157,7 +193,7 @@ enum ShelfGeometry {
       hypot(Double(spines[$0].top.x - spines[$0].base.x), Double(spines[$0].top.y - spines[$0].base.y))
     }
     let medianHeight = heights.sorted()[heights.count / 2]
-    let gapThreshold = max(medianHeight * 0.5, Double(imageSide) * 0.02)
+    let gapThreshold = max(medianHeight * tuning.rowGapFactor, Double(imageSide) * tuning.minRowGap)
 
     let order = standingIdx.sorted { levelOf(spines[$0].base) < levelOf(spines[$1].base) }
     var groups: [[Int]] = []
@@ -170,7 +206,7 @@ enum ShelfGeometry {
     }
     if !current.isEmpty { groups.append(current) }
 
-    let minPerRow = 3
+    let minPerRow = tuning.minBooksPerRow
     var rows: [Row] = []
     var residuals: [Double] = []
     for g in groups {
@@ -251,15 +287,12 @@ enum ShelfGeometry {
       ? (usable.map(\.slope).max()! - usable.map(\.slope).min()!) : 0
     let avgResidual = residuals.isEmpty ? .infinity : residuals.reduce(0, +) / Double(residuals.count)
 
-    let countScore = min(1.0, Double(standingIdx.count) / 12.0)
-    let lineScore = max(0, 1 - avgResidual / (Double(imageSide) * 0.02))
-    let spreadScore = max(0, 1 - angleSpread / 0.5)
-    let rowScore = max(0, 1 - slopeSpread / 0.3)
-    // Com gravidade a vertical não é estimativa, então o peso da dispersão das
-    // lombadas cai e o da qualidade das retas sobe.
-    let confidence = usedGravity
-      ? countScore * 0.15 + lineScore * 0.50 + spreadScore * 0.10 + rowScore * 0.25
-      : countScore * 0.15 + lineScore * 0.35 + spreadScore * 0.30 + rowScore * 0.20
+    let countScore = min(1.0, Double(standingIdx.count) / max(1, tuning.fullConfidenceCount))
+    let lineScore = max(0, 1 - avgResidual / (Double(imageSide) * tuning.maxBaseResidual))
+    let spreadScore = max(0, 1 - angleSpread / tuning.maxAngleSpread)
+    let rowScore = max(0, 1 - slopeSpread / tuning.maxRowSlopeSpread)
+    let w = usedGravity ? tuning.withGravity : tuning.withoutGravity
+    let confidence = countScore * w.count + lineScore * w.line + spreadScore * w.spread + rowScore * w.rows
 
     guard confidence >= minConfidence else {
       return Estimate(quad: nil, confidence: confidence, rows: rows, lying: lyingIdx,

@@ -29,6 +29,46 @@ struct CaptureOptions: Record {
   @Field var transitionMs: Int = 600
   /// Mostra o que o algoritmo inferiu em vez do resultado. Política em TS.
   @Field var diagnostics: Bool = false
+  /// O que decide em pé, fileira e confiança — ver `ShelfGeometry.Tuning`.
+  @Field var geometry: GeometryTuningRecord = GeometryTuningRecord()
+  /// Divisões mais perto que isto das bordas do recorte são descartadas.
+  /// O 0,5 não deixa nenhuma passar: inválido de propósito, como abaixo.
+  @Field var dividerEdgeMargin: Double = 0.5
+}
+
+/// Política da estimativa da estante. Vira `ShelfGeometry.Tuning`.
+///
+/// **Defaults inválidos de propósito**, como os limiares da sessão: o
+/// TypeScript sempre envia todos os campos. Se um dia deixar de enviar, a
+/// tolerância zero não deixa nenhum livro em pé e toda captura recusa o
+/// endireitamento — o defeito aparece na primeira foto, em vez de a geometria
+/// rodar com um valor plausível e defasado (o modo de falha da T037 do marco 1).
+struct GeometryTuningRecord: Record {
+  @Field var standingToleranceDegrees: Double = 0
+  @Field var rowGapFactor: Double = 0
+  @Field var minRowGap: Double = 0
+  @Field var minBooksPerRow: Int = 0
+  @Field var fullConfidenceCount: Double = 0
+  @Field var maxBaseResidual: Double = 0
+  @Field var maxAngleSpread: Double = 0
+  @Field var maxRowSlopeSpread: Double = 0
+  @Field var weightsWithGravity: ConfidenceWeightsRecord = ConfidenceWeightsRecord()
+  @Field var weightsWithoutGravity: ConfidenceWeightsRecord = ConfidenceWeightsRecord()
+}
+
+/// Peso de cada sinal na confiança (R15). Zerados pelo mesmo motivo.
+struct ConfidenceWeightsRecord: Record {
+  @Field var count: Double = 0
+  @Field var line: Double = 0
+  @Field var spread: Double = 0
+  @Field var rows: Double = 0
+}
+
+/// Política da gravação no histórico. Vem do TypeScript — princípio IV.
+struct SaveResultOptions: Record {
+  /// Qualidade do JPEG, de 0 a 1. Zero, inválido de propósito, estraga a
+  /// imagem à vista em vez de passar despercebido.
+  @Field var quality: Double = 0
 }
 
 struct OverlayStyleRecord: Record {
@@ -39,6 +79,11 @@ struct OverlayStyleRecord: Record {
   @Field var minConfidence: Double = 0.3
   /// Cores em "#RRGGBB".
   @Field var palette: [String] = []
+  @Field var showDividers: Bool = true
+  /// "#RRGGBB".
+  @Field var dividerColor: String = "#FFFFFF"
+  /// Em pontos de tela.
+  @Field var dividerWidth: Double = 2
 }
 
 struct SessionOptions: Record {
@@ -56,6 +101,14 @@ public class ViziVisionModule: Module {
   /// A volta usa a duração que a captura recebeu: `dismissResult` não tem
   /// opções, e a política continua vindo do TypeScript.
   private var transitionMs = 0
+
+  /// O último resultado exibido, guardado para o `saveResult` (US4).
+  ///
+  /// O `imageId` que o JavaScript recebe é a chave dele, e o pixel nunca sai
+  /// daqui (princípio II). Vive até o `dismissResult`, o fim da sessão ou a
+  /// próxima captura.
+  private let keptLock = NSLock()
+  private var kept: (id: String, buffer: CVPixelBuffer)?
 
   public func definition() -> ModuleDefinition {
     Name("ViziVision")
@@ -142,6 +195,9 @@ public class ViziVisionModule: Module {
     }
 
     AsyncFunction("startSession") { (options: SessionOptions) -> [String: Any] in
+      // Uma sessão nova começa ao vivo, venha a anterior de onde vier.
+      self.endResultState()
+
       // O modelo precisa estar carregado antes: carregar leva ~720 ms e faria
       // os primeiros segundos de telemetria medirem a carga, não a inferência.
       if !self.engine.isLoaded { try self.engine.load() }
@@ -172,6 +228,11 @@ public class ViziVisionModule: Module {
       let touchedAt = CFAbsoluteTimeGetCurrent()
       self.transitionMs = options.transitionMs
 
+      // A chave do resultado para o `saveResult`. A captura nova descarta a
+      // anterior mesmo que falhe: salvar depois disso gravaria a foto errada.
+      let imageId = UUID().uuidString
+      self.dropResult()
+
       // Congela ANTES de qualquer reconfiguração: a tela precisa segurar a
       // última imagem enquanto o formato é trocado (FR-009).
       // Congela imagem E overlay juntos. Separá-los mostraria caixas de um
@@ -198,10 +259,13 @@ public class ViziVisionModule: Module {
         let shot = try await self.coordinator.capturePhoto()
         let side = self.engine.inputWidth
         let square = try self.coordinator.squareFromPhoto(shot.buffer, side: side)
+        // Os MESMOS limiares do ao vivo, que o TypeScript enviou na sessão.
+        // Fixos aqui, o SC-004 compararia contagens feitas com réguas
+        // diferentes assim que alguém mexesse no limiar — sem ninguém ver.
         let result = try self.engine.run(
           on: square,
-          confidenceThreshold: 0.25,
-          iouThreshold: 0.7)
+          confidenceThreshold: self.coordinator.confidenceThreshold,
+          iouThreshold: self.coordinator.iouThreshold)
 
         // As detecções da FOTO substituem as do último frame ao vivo. As
         // coordenadas são comparáveis: as duas passaram pela mesma
@@ -210,8 +274,13 @@ public class ViziVisionModule: Module {
         // eixos não informa inclinação.
         var straightened = false
         var declineReason = "sem protótipos de máscara"
+        /// A confiança da geometria (R15): a que o `minGeometryConfidence`
+        /// compara, e a que o contrato chama de `geometryConfidence`.
         var confidence = 0.0
-        var shelves: [[String: Any]] = []
+        /// A nitidez do cruzamento entre a reta das bases e o horizonte. É
+        /// outra medida — e era ela que atravessava como `geometryConfidence`.
+        var azimuth = 0.0
+        var shelves: [Rectify.Shelf] = []
         var shelfCount = 0
         var lyingCount = 0
         var usedGravity = false
@@ -248,7 +317,8 @@ public class ViziVisionModule: Module {
             gravity: gravity,
             focal: focal,
             minInstances: options.minInstancesForGeometry,
-            minConfidence: options.minGeometryConfidence)
+            minConfidence: options.minGeometryConfidence,
+            tuning: ShelfGeometry.Tuning(options.geometry))
 
           declineReason = estimate.declineReason ?? ""
           shelfCount = estimate.rows.count
@@ -260,7 +330,7 @@ public class ViziVisionModule: Module {
           // há retificação, e são preenchidas adiante. Atribuir aqui garante
           // que a ordem "usa antes de atribuir" não se repita.
           shelves = estimate.rows.map {
-            ["count": $0.indices.count, "dividers": [Double](), "top": 0.0, "bottom": 0.0]
+            Rectify.Shelf(count: $0.indices.count, dividers: [], top: 0, bottom: 0)
           }
 
           // ── Retificação pelo PLANO, não pelos objetos ──────────────────
@@ -335,9 +405,12 @@ public class ViziVisionModule: Module {
                  margin: options.cropMargin),
                let rendered = Rectify.render(out.image, context: self.ciContext) {
               straightened = out.fullyRectified
+              // O motivo da estimativa vem antes do da retificação. "Poucos
+              // livros" diz à pessoa o que fazer diferente; "sem ponto de
+              // fuga" é só a consequência dele, e era o que aparecia.
               declineReason = out.fullyRectified
                 ? ""
-                : "só rotação — \(out.fallbackReason ?? "motivo desconhecido")"
+                : "só rotação — \(estimate.declineReason ?? out.fallbackReason ?? "motivo desconhecido")"
 
               if options.diagnostics {
                 // Sobre a foto CRUA: horizonte, pontos de fuga, recorte e a
@@ -370,7 +443,8 @@ public class ViziVisionModule: Module {
                 let toPhoto = { (x: Float, y: Float) in
                   CGPoint(x: CGFloat(x) * kx, y: CGFloat(y) * ky)
                 }
-                shelves = rowsForShelves.compactMap { row in
+                let edge = options.dividerEdgeMargin
+                shelves = rowsForShelves.compactMap { row -> Rectify.Shelf? in
                   let members = row.indices.compactMap {
                     result.instances.indices.contains($0) ? result.instances[$0] : nil
                   }
@@ -383,7 +457,7 @@ public class ViziVisionModule: Module {
                     let edgeX = (a.x + a.width + b.x) / 2
                     let baseY = max(a.y + a.height, b.y + b.height)
                     if let n = out.normalize(toPhoto(edgeX, baseY)),
-                       n.x > 0.01, n.x < 0.99 {
+                       Double(n.x) > edge, Double(n.x) < 1 - edge {
                       cuts.append(Double(n.x))
                     }
                   }
@@ -394,9 +468,9 @@ public class ViziVisionModule: Module {
                   let nTop = out.normalize(toPhoto(midX, topY))?.y ?? 0
                   let nBottom = out.normalize(toPhoto(midX, bottomY))?.y ?? 0
 
-                  return ["count": members.count, "dividers": cuts,
-                          "top": min(Double(nTop), Double(nBottom)),
-                          "bottom": max(Double(nTop), Double(nBottom))]
+                  return Rectify.Shelf(count: members.count, dividers: cuts,
+                                       top: min(Double(nTop), Double(nBottom)),
+                                       bottom: max(Double(nTop), Double(nBottom)))
                 }
               }
             }
@@ -404,12 +478,15 @@ public class ViziVisionModule: Module {
             declineReason = "sem leitura de gravidade"
           }
 
-          confidence = azimuthConfidence
+          confidence = estimate.confidence
+          azimuth = azimuthConfidence
         }
 
         // Uma imagem na tela, e as detecções são dela. Endireitada quando deu
         // para endireitar; a canônica quando não deu.
         PreviewSink.shared.showStill(displayBuffer)
+        // É esta imagem que o `saveResult` grava: a que a pessoa está vendo.
+        self.keepResult(imageId, displayBuffer)
 
         // O overlay ao vivo não vale sobre a imagem endireitada — as
         // coordenadas são de outro espaço. Limpa em vez de desenhar errado.
@@ -433,7 +510,12 @@ public class ViziVisionModule: Module {
         } else {
           destination = .whole(size: shown)
         }
+        // As divisões estão normalizadas no recorte ENDIREITADO. Sobre a
+        // canônica ou o diagnóstico cairiam em outro espaço — lá, nenhuma.
+        let drawn = straightened && !options.diagnostics ? shelves : []
         PreviewSink.shared.onView {
+          // Por baixo da transição: aparecem quando ela termina (FR-008).
+          $0.showDividers(drawn, imageSize: shown)
           $0.result.settle(destination, durationMs: options.transitionMs)
         }
 
@@ -442,12 +524,13 @@ public class ViziVisionModule: Module {
           "straightened": straightened,
           "declineReason": declineReason,
           "geometryConfidence": confidence,
-          "shelves": shelves,
+          "azimuthConfidence": azimuth,
+          "shelves": shelves.map(\.dictionary),
           "shelfCount": shelfCount,
           "lyingCount": lyingCount,
           "usedGravity": usedGravity,
           "azimuthScores": azimuthScores,
-          "imageId": UUID().uuidString,
+          "imageId": imageId,
           "elapsedMs": shot.elapsedMs,
           "readyMs": (CFAbsoluteTimeGetCurrent() - touchedAt) * 1000,
           "photoWidth": CVPixelBufferGetWidth(shot.buffer),
@@ -455,7 +538,10 @@ public class ViziVisionModule: Module {
           "instances": result.instances.count,
         ]
       } catch {
-        PreviewSink.shared.onView { $0.result.teardown() }
+        PreviewSink.shared.onView {
+          $0.result.teardown()
+          $0.clearDividers()
+        }
         PreviewSink.shared.frozen = false
         self.coordinator.results.setPaused(false)
         throw error
@@ -469,11 +555,32 @@ public class ViziVisionModule: Module {
       // Daqui, um frame ao vivo podia chegar à tela antes dela e piscar sobre
       // o resultado. Sem view, descongela do mesmo jeito.
       let duration = self.transitionMs
+      self.dropResult()
       DispatchQueue.main.async {
+        // As divisões saem neste mesmo quadro: a transição reaparece por cima
+        // delas, e depois dela vem a câmera ao vivo.
+        PreviewSink.shared.view?.clearDividers()
         PreviewSink.shared.view?.result.dismiss(durationMs: duration)
         self.coordinator.results.setPaused(false)
         PreviewSink.shared.frozen = false
       }
+    }
+
+    // Grava o resultado que está na tela (US4). O pixel vai do buffer ao
+    // arquivo sem passar pelo JavaScript; o que volta é o caminho.
+    AsyncFunction("saveResult") { (options: SaveResultOptions) -> [String: Any] in
+      guard let current = self.keptResult() else {
+        throw ResultArchive.ArchiveError.noResult
+      }
+      let saved = try ResultArchive.save(
+        current.buffer, id: current.id, quality: options.quality, context: self.ciContext)
+      return [
+        "id": current.id,
+        "file": saved.file,
+        "width": saved.width,
+        "height": saved.height,
+        "bytes": saved.bytes,
+      ]
     }
 
     AsyncFunction("setOverlayStyle") { (record: OverlayStyleRecord) in
@@ -486,6 +593,11 @@ public class ViziVisionModule: Module {
       if !record.palette.isEmpty {
         style.palette = record.palette.compactMap { UIColor(hex: $0)?.cgColor }
       }
+      style.showDividers = record.showDividers
+      style.dividerWidth = CGFloat(record.dividerWidth)
+      if let color = UIColor(hex: record.dividerColor)?.cgColor {
+        style.dividerColor = color
+      }
       // Trocar estilo não pode custar um frame nem depender da view existir.
       PreviewSink.shared.style = style
     }
@@ -495,6 +607,7 @@ public class ViziVisionModule: Module {
 
     AsyncFunction("stopSession") { () -> [String: Any] in
       PreviewSink.shared.active = false
+      self.endResultState()
       let summary = self.coordinator.stop()
       self.coordinator.onSample = nil
       return summary
@@ -538,5 +651,72 @@ public class ViziVisionModule: Module {
         ])
       : image
     return ciContext.createCGImage(scaled, from: scaled.extent.integral)
+  }
+
+  // MARK: - Resultado guardado
+
+  private func keepResult(_ id: String, _ buffer: CVPixelBuffer) {
+    keptLock.lock()
+    kept = (id: id, buffer: buffer)
+    keptLock.unlock()
+  }
+
+  private func keptResult() -> (id: String, buffer: CVPixelBuffer)? {
+    keptLock.lock()
+    defer { keptLock.unlock() }
+    return kept
+  }
+
+  private func dropResult() {
+    keptLock.lock()
+    kept = nil
+    keptLock.unlock()
+  }
+
+  /// Desfaz o estado de resultado sem animar: congelamento, pausa, o
+  /// resultado guardado e as camadas dele.
+  ///
+  /// Uma sessão encerrada no resultado — a aba trocada sem "voltar" — deixaria
+  /// congelamento e pausa presos, e a câmera da sessão seguinte nunca
+  /// apareceria. (Achado na leitura, não no aparelho.)
+  private func endResultState() {
+    PreviewSink.shared.frozen = false
+    coordinator.results.setPaused(false)
+    dropResult()
+    PreviewSink.shared.onView {
+      $0.result.teardown()
+      $0.clearDividers()
+    }
+  }
+}
+
+// MARK: - Da fronteira para os tipos do nativo
+
+private extension ShelfGeometry.Tuning {
+  init(_ r: GeometryTuningRecord) {
+    self.init(
+      standingToleranceRadians: r.standingToleranceDegrees * .pi / 180,
+      rowGapFactor: r.rowGapFactor,
+      minRowGap: r.minRowGap,
+      minBooksPerRow: r.minBooksPerRow,
+      fullConfidenceCount: r.fullConfidenceCount,
+      maxBaseResidual: r.maxBaseResidual,
+      maxAngleSpread: r.maxAngleSpread,
+      maxRowSlopeSpread: r.maxRowSlopeSpread,
+      withGravity: ShelfGeometry.Weights(r.weightsWithGravity),
+      withoutGravity: ShelfGeometry.Weights(r.weightsWithoutGravity))
+  }
+}
+
+private extension ShelfGeometry.Weights {
+  init(_ r: ConfidenceWeightsRecord) {
+    self.init(count: r.count, line: r.line, spread: r.spread, rows: r.rows)
+  }
+}
+
+private extension Rectify.Shelf {
+  /// Números, nunca pixels: é o que atravessa a fronteira.
+  var dictionary: [String: Any] {
+    ["count": count, "dividers": dividers, "top": top, "bottom": bottom]
   }
 }

@@ -4,15 +4,20 @@ App React Native + Expo de detecção e segmentação em tempo real, on-device.
 
 ## Estado
 
-| marco | | |
+| spec | | |
 |---|---|---|
-| **1 · Prova de vida do Core ML** | ✅ concluído | 36 de 36 |
-| **2 · Câmera ao vivo e telemetria** | 🟡 implementado, medido parcialmente | 30 de 32 |
-| 3 · Caixas na tela | — | |
-| 4 · Os três relógios | — | |
-| 5 · Máscaras em shader | — | |
-| 6 · Acabamento e adaptação | — | |
-| 7 · Android | — | |
+| **001 · Prova de vida do Core ML** | ✅ concluído | 36 de 36 |
+| **002 · Câmera ao vivo e telemetria** | ✅ concluído | 32 de 32 |
+| **003 · Caixas e máscaras** | ✅ portão atingido | 26 de 29 |
+| **004 · Captura e resultado** | 🟡 código completo, falta o aparelho | 37 de 38 |
+| Acabamento e adaptação | — | |
+| Android | — | |
+
+A sequência se afastou da tabela de marcos da constituição, e cada desvio foi
+registrado na spec que o fez. As máscaras (antigo marco 5) entraram na 003. Os
+três relógios (antigo marco 4) foram descartados em 16/09: a 60 fps não sobra
+intervalo entre detecções para disfarçar. A 004 é o primeiro marco de produto,
+e não estava na tabela.
 
 ### Marco 1 — a inferência cabe, com folga de uma ordem de grandeza
 
@@ -49,10 +54,45 @@ Sessão de 3,6 min, `stretch`, build Debug
 
 Degradação entre o começo e o fim: inferência −0,9%, fps 0,0%.
 
-**Por que "medido parcialmente":** a sessão foi em **Debug**, com Swift em
-`-Onone` — a decodificação custou ~35× o que custa em Release. E a bateria não
-se moveu em 3,6 min, então o SC-007 segue sem resposta. Repetir em Release e por
-mais tempo antes de declarar fechado.
+Essa primeira sessão foi em **Debug**, e a bateria não se moveu em 3,6 min. O
+marco fechou em 17/09 com uma sessão de 5,6 min em **Release**, já com 22
+capturas no meio: 19321 de 19321 frames, 60 fps do começo ao fim, térmico
+`nominal`. E a bateria, enfim medida: **~53 pontos por hora**. É o primeiro
+argumento concreto para limitar a cadência.
+
+### Marco 3 — caixas e máscaras, sem perder um quadro
+
+Sessão de 31 s, Release, caixas e máscaras ligadas
+([medição](specs/003-overlay-mascaras/medicoes/)):
+
+| | |
+|---|---|
+| frames | **1842 de 1842** |
+| taxa | **60 fps** |
+| ponta-a-ponta | **36,43 ms** — abaixo da linha de base do marco 2 |
+| desenho | 2,02 ms, no `CADisplayLink`, fora do orçamento do frame |
+
+As máscaras são compostas com Accelerate na resolução dos protótipos (160×160),
+e o compositor amplia. A rota Metal ficou disponível e não precisou ser paga.
+
+### Marco 4 — apontar, apertar, contar
+
+O primeiro marco que faz algo por alguém. Um toque tira uma foto de 12 MP,
+conta os livros, endireita a estante e mostra a faixa de lombadas reta, com as
+divisões, numa transição contínua a partir do que estava na tela.
+
+- **A retificação é do plano, não dos objetos.** A gravidade dá a vertical; a
+  reta das bases dos livros, cruzada com o horizonte, dá a horizontal.
+- **Recusar é um desfecho válido.** Quando a geometria não merece confiança, o
+  resultado sai sem endireitar e diz por quê.
+- **A foto não degrada a sessão:** a câmera volta a 60 fps depois de cada uma
+  das 22 capturas medidas.
+- **O histórico guarda a faixa** em JPEG na pasta de documentos, exposta no app
+  Arquivos para levar ao Colab.
+
+**Falta o aparelho.** A revisão de fechamento (25/09) corrigiu sete desvios
+entre código e spec e acrescentou o histórico — tudo escrito e ainda sem
+build. A T034 (SC-007) valida o histórico e, junto, o resto.
 
 ### O que a medição mudou na arquitetura
 
@@ -61,8 +101,8 @@ A premissa era inferência em ≤ 25 ms, e o desenho dos
 intervalo entre detecções. **A 3,1 ms cabem cinco inferências num frame de
 60 Hz** — o intervalo praticamente sumiu.
 
-O gargalo deixou de ser o modelo. Passa a ser composição de máscara e render,
-e **nada disso tem número ainda**.
+O gargalo deixou de ser o modelo. Passou a ser composição de máscara e render,
+e o marco 3 mediu os dois: **2,02 ms**, fora do orçamento do frame.
 
 ### Limitações conhecidas
 
@@ -73,6 +113,12 @@ e **nada disso tem número ainda**.
 - **`executionUnit` reporta o que foi pedido**, não o que rodou. Perdeu urgência:
   3,1 ms só é possível no acelerador dedicado.
 - **Reassinatura após 7 dias** ainda não verificada.
+- **Com o resultado na tela, a inferência ao vivo continua rodando.** O que
+  pausa é a publicação, não o modelo: bateria gasta enquanto a pessoa olha a
+  faixa.
+- **A confiança da geometria não tem calibração registrada.** Os limiares
+  foram validados olhando recusas, e até 25/09 o número na tela era outro
+  (ver [research da 004](specs/004-captura-resultado/research.md)).
 
 ## Desenvolvimento dirigido por spec
 
@@ -143,15 +189,24 @@ Branch por feature, nomeada `mobile/{número}-{slug}` — o prefixo existe porqu
 o repositório é compartilhado com `web/`. Criada pela extensão git do Spec Kit
 (`/speckit-git-feature`). Auto-commit está desligado.
 
-## Estrutura planejada
+## Estrutura
 
 ```
-app/                    telas (Expo Router)
-src/vision/             pipeline, tracker, render, controle adaptativo
-modules/vizi-vision/    Expo Module nativo — Core ML (iOS) / LiteRT (Android)
-models/                 .mlpackage + manifest
-tools/                  export e avaliação do modelo (Python)
+App.tsx                 abas: câmera, histórico, medição
+src/ui/                 telas
+src/camera/             sessão de câmera e sua política
+src/capture/            captura e sua política — inclusive a da geometria
+src/history/            índice do histórico
+src/overlay/            aparência do overlay
+src/telemetry/          exportação e portão da sessão
+src/bench/              medição controlada do marco 1
+modules/vizi-vision/    Expo Module nativo — câmera, Core ML, overlay,
+                        captura, retificação, transição
+models/                 .mlpackage + shapes verificados
+plugins/                config plugins
 ```
+
+Limiares, estilo e tempos vêm de `src/`; o Swift executa (princípio IV).
 
 `ios/` e `android/` **não são versionados**: com Continuous Native Generation
 eles são gerados por `expo prebuild` a partir dos config plugins em

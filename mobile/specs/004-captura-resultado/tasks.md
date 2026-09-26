@@ -69,7 +69,7 @@ Caminhos relativos a `mobile/`.
 - [x] T017 [US2] Desenhar o quadrilátero estimado sobre a foto, como ferramenta de diagnóstico — `Diagnostics.swift`: horizonte, pontos de fuga, recorte e curva sobre a foto crua. **Era a tarefa que eu tinha pulado, e pular custou três reescritas**
 - [x] T018 [US2] Derivar a homografia e aplicá-la ao recorte — `CIPerspectiveCorrection` para a imagem, DLT próprio para mapear pontos
 - [x] T019 [US2] Recusar abaixo do limiar, com motivo legível para a tela (**FR-011**) — recusa com motivo legível; a imagem canônica é exibida mesmo assim
-- [x] T020 [US2] Desenhar as divisões entre objetos adjacentes (**FR-008**) — fronteiras mapeadas pela homografia, normalizadas de 0 a 1
+- [x] T020 [US2] Desenhar as divisões entre objetos adjacentes (**FR-008**) — fronteiras mapeadas pela homografia, normalizadas de 0 a 1. **Até 25/09 eram calculadas e nunca desenhadas** — só viravam o texto "N divisões". Agora são linhas sobre o resultado (`PreviewView.dividerLayer`), com botão para ligar e desligar; a validar no aparelho
 - [x] T021 [US2] Arrasto horizontal quando a faixa não couber (**FR-015**) — validada pelo autor em 2026-09-24
 - [x] T022 [US2] 🚦 Verificar **SC-003**: lombadas verticais com desvio < 3° a até 30° de ângulo — validada pelo autor em 2026-09-24
 - [x] T023 [US2] 🚦 Verificar **SC-006**: forçar casos ruins e confirmar que **recusa em vez de errar** — validada pelo autor em 2026-09-24
@@ -88,7 +88,7 @@ Caminhos relativos a `mobile/`.
 - [x] T027 [US3] Começar a animação **no toque**, com o frame congelado (**FR-009**) — o frame congelado se aproxima das detecções ao vivo; a segunda metade parte de onde a primeira estiver. A validar pela T030
 - [x] T028 [US3] Substituir pelo frame de alta resolução sem salto (**FR-010**) — ; virou pré-requisito de coerência, não refinamento
 - [x] T029 [US3] Animar a volta, em `dismissResult` — o caminho da ida ao contrário, a partir de onde a transição estiver, inclusive interrompida. A validar pela T030
-- [ ] T030 [US3] 🚦 Verificar **SC-001** (< 1,5 s) e **SC-002** (60 fps na transição) — o resultado final aparece em `readyMs + transitionMs`; `readyMs` está na tela do resultado
+- [x] T030 [US3] 🚦 Verificar **SC-001** (< 1,5 s) e **SC-002** (60 fps na transição) — validada pelo autor em 2026-09-25
 
 **Checkpoint**: a captura deixou de parecer uma troca de tela.
 
@@ -96,19 +96,19 @@ Caminhos relativos a `mobile/`.
 
 ## Phase 6: User Story 4 - Histórico (Priority: P4)
 
-- [ ] T031 [US4] Criar `src/history/store.ts`: imagens em arquivo, índice em JSON
-- [ ] T032 [US4] `saveResult` grava a imagem e devolve a entrada (**FR-013**)
-- [ ] T033 [US4] Criar `src/ui/HistoryScreen.tsx` com a lista
-- [ ] T034 [US4] Abrir uma entrada e ver imagem e contagem (**SC-007**)
+- [x] T031 [US4] Criar `src/history/store.ts`: imagens em arquivo, índice em JSON — índice versionado em `Documents/history/index.json`, escritas em fila. O `expo-file-system` virou dependência direta: estava só aninhado no `expo`, e o app não conseguia importá-lo
+- [x] T032 [US4] `saveResult` grava a imagem e devolve a entrada (**FR-013**) — o nativo grava em JPEG o resultado **exibido** (`ResultArchive.swift`), com caminho relativo aos documentos; o `imageId` passou a apontar para esse resultado, guardado até o `dismiss`. A validar pela T034
+- [x] T033 [US4] Criar `src/ui/HistoryScreen.tsx` com a lista — aba "Histórico". Trocar de aba desmonta a câmera, e isso expôs dois defeitos corrigidos junto (ver research, fechamento). A validar pela T034
+- [ ] T034 [US4] Abrir uma entrada e ver imagem e contagem (**SC-007**) — código pronto. Falta o aparelho: salvar, fechar o app, reabrir, abrir a entrada — mesma imagem, mesma contagem
 
 ---
 
 ## Phase 7: Polish & Cross-Cutting
 
-- [ ] T035 [P] Registrar as medições em `research.md`, fechando R14–R17
-- [ ] T036 Auditar a fronteira: nenhum pixel atravessa; `imageId` em vez de imagem
-- [ ] T037 Auditar o Swift: nenhuma constante de política (reprovou nos marcos 1 e 3)
-- [ ] T038 Atualizar `mobile/README.md`
+- [x] T035 [P] Registrar as medições em `research.md`, fechando R14–R17 — R14 a R17 fechadas. **Lacuna:** os números da calibração da T024 não foram registrados
+- [x] T036 Auditar a fronteira: nenhum pixel atravessa; `imageId` em vez de imagem — **passou**. Atravessam números, textos e listas curtas; o maior campo é `azimuthScores`, 90 números, e só no diagnóstico. O histórico carrega a imagem pelo `<Image>`, do arquivo direto para a tela
+- [x] T037 Auditar o Swift: nenhuma constante de política (reprovou nos marcos 1 e 3) — **reprovou e foi corrigida.** A foto inferia com `0.25`/`0.7` fixos e agora usa os limiares da sessão; as constantes da `ShelfGeometry` foram para `CaptureOptions.geometry`, e a margem das divisões para `dividerEdgeMargin`. Ficam no Swift as guardas contra entrada degenerada. Falta o build
+- [x] T038 Atualizar `mobile/README.md`
 
 ---
 

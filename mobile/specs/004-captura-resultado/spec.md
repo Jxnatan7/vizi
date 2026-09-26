@@ -188,5 +188,11 @@ brinquedo de demonstração. Último porque o resultado já é útil sem isso.
 - **Como a faixa é apresentada quando é muito larga.** O arrasto horizontal
   resolve o caso comum; ampliação e redução ficam para depois de ver o
   resultado real.
+
+  *Registro de 25/09:* na implementação a faixa aparece **inteira, reduzida
+  para caber**, e foi assim que o autor validou a T021. Como ela sempre cabe, o
+  arrasto do FR-015 nunca é acionado — não há código de arrasto. Arrasto e
+  ampliação voltam com a releitura, quando houver máscaras sobre a faixa para
+  conferir de perto.
 - **O que mais entra no histórico.** Data e contagem bastam agora. Local,
   anotação e exportação dependem de o histórico provar que é usado.

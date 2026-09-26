@@ -4,6 +4,41 @@ Quatro incógnitas. A R15 é a que decide se o marco entrega algo confiável.
 
 ---
 
+## FECHAMENTO — revisão do código contra a spec, 25/09/2026
+
+A T030 fechou a última incógnita, a R16. Antes de encerrar o marco, uma leitura
+do código contra a spec achou sete desvios. Nenhum aparece no uso normal, e é
+por isso que sobreviveram até aqui. **Tudo abaixo está escrito e ainda sem
+build**; a validação vem junto com a T034.
+
+| | o que estava | o que ficou |
+|---|---|---|
+| FR-008 | divisões calculadas e nunca desenhadas: só o texto "N divisões" | linhas sobre o resultado, com botão para ligar e desligar |
+| SC-004 | a foto inferia com `0.25`/`0.7` fixos no Swift, ignorando a sessão | a foto usa os limiares do ao vivo |
+| princípio IV | tolerância de em pé, vão entre fileiras, mínimo por fileira e pesos da confiança fixos na `ShelfGeometry` | em `CaptureOptions.geometry`, com os mesmos valores |
+| contrato | `geometryConfidence` levava a confiança do **azimute**, não a da R15, que é a que o limiar compara | `geometryConfidence` é a da R15; a do azimute atravessa como `azimuthConfidence` |
+| FR-011 | com a geometria recusada, "poucos livros" era trocado por "sem ponto de fuga horizontal" | o motivo da estimativa vem primeiro |
+| sessão | `configure` acumulava entrada e saídas na mesma `AVCaptureSession`; um segundo `startSession` falharia | remove as anteriores antes de adicionar |
+| sessão | parar a sessão no resultado deixava congelamento e pausa presos | `startSession` e `stopSession` desfazem o estado de resultado |
+
+Os dois defeitos de sessão foram achados na leitura, não no aparelho. O
+histórico os expôs: ele é uma aba, e trocar de aba desmonta a câmera.
+
+**O plano errou uma dependência.** O `expo-file-system` "já presente" estava
+aninhado em `node_modules/expo/node_modules`. O autolinking o incluía no
+binário, mas o app não conseguia importá-lo. Virou dependência direta, na mesma
+versão.
+
+**Tirar as faixas do aparelho.** Com `UIFileSharingEnabled`, a pasta de
+documentos aparece no app Arquivos e em `ifuse --documents com.jxnatan7.vizi`:
+`history/*.jpg` e o `index.json`. É o material para medir a releitura.
+
+**Ficou para specs próprias**, por decisão do autor em 25/09: a releitura da
+faixa endireitada pelo modelo, com caixas e máscaras no resultado, e a faixa de
+interesse arrastável que limita onde a detecção vale.
+
+---
+
 ## MEDIÇÃO — 5,6 min, 22 capturas, Release ✅
 
 `medicoes/2026-09-17-canonico-22-capturas.json`. **19321 de 19321 frames.**
@@ -98,6 +133,14 @@ dezenas de milissegundos sem incomodar.
 **Como fechar.** Desenhar o quadrilátero estimado sobre a foto, antes de
 endireitar, e olhar se ele acompanha a estante.
 
+**Fechada em 24/09 — por outro caminho.** O quadrilátero pelos topos e bases
+foi abandonado: topos de livros não formam reta. A retificação passou a ser **do
+plano**. A gravidade dá a vertical, e a reta das bases da fileira mais
+populosa, cruzada com o horizonte, dá a horizontal. As máscaras ficaram com três
+papéis: separar em pé de deitado, achar as bases e agrupar as fileiras. O
+desenho sobre a foto crua (T017) foi o que tornou isso depurável; o SC-003 foi
+validado pelo autor na T022.
+
 ---
 
 ## R15 — Quando confiar na geometria
@@ -118,6 +161,17 @@ torta com aparência de corrigida.
 **Como fechar.** Coletar os sinais em capturas reais, incluindo casos
 deliberadamente ruins — três livros, estante curva, foto muito de lado — e
 calibrar os limiares com dado, não com palpite.
+
+**Fechada em 24/09, com uma lacuna.** Entraram quatro sinais: contagem de
+livros em pé, resíduo da reta das bases, dispersão angular das lombadas e
+diferença de inclinação entre fileiras. A sanidade do quadrilátero virou guarda,
+não nota, e o ângulo implícito não entrou. Os limiares ficaram em 5 livros e
+0,6, e "recusa em vez de errar" foi validado pelo autor (T023, T024).
+
+**A lacuna:** os números das capturas ruins não foram registrados. E não seriam
+os do limiar: até 25/09 o `geometryConfidence` na tela era o do azimute (ver
+fechamento). A próxima calibração — a faixa de interesse muda o que entra na
+geometria, então vai haver uma — já tem o número certo na tela.
 
 ---
 
@@ -149,7 +203,8 @@ do recorte. No último quadro a transformação é só uma translação, e a tro
 pela camada de vídeo, com a mesma imagem por baixo, não tem o que mostrar
 (FR-010).
 
-**Ainda falta olhar**, que é como este item fecha — na T030.
+**Fechada em 25/09** pela T030, validada pelo autor: SC-001 e SC-002, sem a
+torção que a armadilha previa.
 
 ---
 
@@ -167,6 +222,10 @@ apertado e vale considerar manter um formato único que sirva aos dois.
 
 **Risco conhecido.** A retomada precisa devolver 60 fps (SC-005). Uma sessão
 que volta degradada é pior que uma que demora a voltar.
+
+**Fechada em 17/09.** A ida e volta não degrada a sessão: 60 fps de volta
+depois de cada uma das 22 capturas da medição no topo deste arquivo, e 21
+delas nem aparecem na telemetria (T007).
 
 ---
 

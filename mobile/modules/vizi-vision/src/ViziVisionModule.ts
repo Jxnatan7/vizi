@@ -2,8 +2,8 @@ import { NativeModule, requireNativeModule } from 'expo';
 
 import type {
   BenchmarkOptions, ModelInfo, NativeProbe, RawMeasurement,
-  CaptureOptions, CaptureResult, OverlayStyle, Session, SessionInfo, SessionOptions,
-  TelemetrySample, TransformMode,
+  CaptureOptions, CaptureResult, OverlayStyle, SavedImage, SaveResultOptions,
+  Session, SessionInfo, SessionOptions, TelemetrySample, TransformMode,
 } from './ViziVision.types';
 
 type Events = {
@@ -27,6 +27,8 @@ declare class ViziVisionModule extends NativeModule<Events> {
 
   capture(options: CaptureOptions): Promise<CaptureResult>;
   dismissResult(): Promise<void>;
+  /** Grava o resultado que está na tela. O índice é do TypeScript. */
+  saveResult(options: SaveResultOptions): Promise<SavedImage>;
 }
 
 export default requireNativeModule<ViziVisionModule>('ViziVision');

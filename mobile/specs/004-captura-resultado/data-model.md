@@ -44,9 +44,10 @@ O que a pessoa vê e pode salvar.
 
 | Atributo | Descrição |
 |---|---|
-| id | identificador |
-| arquivo | caminho da imagem no aparelho |
+| id | identificador — o mesmo `imageId` da captura |
+| arquivo | caminho da imagem, **relativo** à pasta de documentos: o absoluto muda a cada reinstalação |
 | contagem, endireitado, capturadoEm | do resultado |
+| largura, altura | da imagem gravada, para exibi-la na proporção sem abri-la |
 
 **Imagens em arquivo, índice em JSON.** Guardar imagem dentro do índice o faria
 crescer sem limite e tornaria a listagem lenta — o problema clássico de misturar

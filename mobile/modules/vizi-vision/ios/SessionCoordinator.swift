@@ -31,8 +31,11 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
   // `start()`; se algum dia deixar de enviar, a detecção zera na hora em vez de
   // usar um valor plausível e desatualizado — que foi exatamente o modo de
   // falha que a auditoria T037 do marco 1 encontrou.
-  private var confidenceThreshold: Float = -1
-  private var iouThreshold: Float = -1
+  //
+  // Legíveis de fora porque a foto infere com os MESMOS limiares: com valores
+  // próprios, o SC-004 compararia contagens feitas com réguas diferentes.
+  private(set) var confidenceThreshold: Float = -1
+  private(set) var iouThreshold: Float = -1
 
   /// Janela corrente. Zerada a cada amostra — médias acumuladas escondem
   /// exatamente a degradação que este marco procura.

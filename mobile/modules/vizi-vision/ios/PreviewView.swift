@@ -25,11 +25,26 @@ final class PreviewView: ExpoView {
   /// Durante a transição, o overlay vive dentro do cartão que se aproxima.
   private var overlayLent = false
 
+  /// As divisões entre livros sobre o resultado (FR-008).
+  ///
+  /// Fica por baixo da transição, que é acrescentada depois e cobre a view
+  /// inteira: as divisões só aparecem quando ela termina e se esconde.
+  private let dividerLayer = CAShapeLayer()
+  private var dividerShelves: [Rectify.Shelf] = []
+  private var dividerImageSize = CGSize.zero
+
+  /// Estilo das camadas do resultado. Chega pelo `PreviewSink`, como o do
+  /// overlay.
+  var resultStyle = OverlayStyle() { didSet { drawDividers() } }
+
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     displayLayer.videoGravity = .resizeAspect
     layer.addSublayer(displayLayer)
     overlay.attach(to: layer)
+    dividerLayer.fillColor = nil
+    dividerLayer.lineCap = .round
+    layer.addSublayer(dividerLayer)
     backgroundColor = .black
     PreviewSink.shared.view = self
   }
@@ -44,9 +59,59 @@ final class PreviewView: ExpoView {
     displayLayer.frame = bounds
     // Emprestado ao cartão, o overlay está no espaço dele, não no da view.
     if !overlayLent { overlay.layout(bounds) }
+    dividerLayer.frame = bounds
+    drawDividers()
     let scale = max(1, traitCollection.displayScale)
     PreviewSink.shared.stagePixels = CGSize(
       width: bounds.width * scale, height: bounds.height * scale)
+  }
+
+  // MARK: - Divisões
+
+  /// - Parameters:
+  ///   - shelves: fileiras com divisões e bandas normalizadas no resultado
+  ///   - imageSize: a imagem exibida, de onde sai o retângulo em que ela cabe
+  func showDividers(_ shelves: [Rectify.Shelf], imageSize: CGSize) {
+    dividerShelves = shelves
+    dividerImageSize = imageSize
+    drawDividers()
+  }
+
+  func clearDividers() {
+    dividerShelves = []
+    drawDividers()
+  }
+
+  /// Linhas verticais, cada uma na banda da sua fileira.
+  ///
+  /// O retângulo é o mesmo do `resizeAspect` da camada de vídeo: é ali que a
+  /// imagem endireitada aparece, e as divisões estão normalizadas nela.
+  private func drawDividers() {
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    defer { CATransaction.commit() }
+
+    guard resultStyle.showDividers, !dividerShelves.isEmpty,
+          dividerImageSize.width > 0, dividerImageSize.height > 0 else {
+      dividerLayer.path = nil
+      return
+    }
+
+    let rect = AVMakeRect(aspectRatio: dividerImageSize, insideRect: bounds)
+    let path = CGMutablePath()
+    for shelf in dividerShelves {
+      let top = rect.minY + CGFloat(shelf.top) * rect.height
+      let bottom = rect.minY + CGFloat(shelf.bottom) * rect.height
+      guard bottom > top else { continue }
+      for divider in shelf.dividers {
+        let x = rect.minX + CGFloat(divider) * rect.width
+        path.move(to: CGPoint(x: x, y: top))
+        path.addLine(to: CGPoint(x: x, y: bottom))
+      }
+    }
+    dividerLayer.path = path
+    dividerLayer.strokeColor = resultStyle.dividerColor
+    dividerLayer.lineWidth = resultStyle.dividerWidth
   }
 
   /// O overlay entra no cartão da transição e se aproxima junto com a imagem.
@@ -196,6 +261,7 @@ final class PreviewSink {
     view.overlay.store = store
     view.overlay.imageSide = imageSide
     view.overlay.style = style
+    view.resultStyle = style
     if active { view.overlay.start() } else { view.overlay.stop() }
   }
 }

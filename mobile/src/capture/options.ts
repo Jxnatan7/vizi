@@ -39,4 +39,35 @@ export const DEFAULT_CAPTURE: CaptureOptions = {
    * todos "a imagem ficou estranha". Sem ver as etapas, consertar é adivinhar.
    */
   diagnostics: false,
+
+  /**
+   * Viviam como constantes no `ShelfGeometry.swift` até a T037 deste marco.
+   * Os valores são os mesmos de lá: mudar de lugar não pode mudar a geometria
+   * que o autor validou em 24/09.
+   */
+  geometry: {
+    /** Em pé ou deitado. Só é mensurável porque a gravidade dá referência. */
+    standingToleranceDegrees: 25,
+
+    /** Duas fileiras se separam onde o vão passa de meia altura mediana… */
+    rowGapFactor: 0.5,
+    /** …e nunca menos que 2% do lado da imagem. */
+    minRowGap: 0.02,
+
+    /** Duas bases dão uma reta frágil, que contaminaria a homografia. */
+    minBooksPerRow: 3,
+
+    // Confiança (R15): cada sinal vai de 1 a 0 até o limite abaixo.
+    fullConfidenceCount: 12,
+    maxBaseResidual: 0.02,
+    maxAngleSpread: 0.5,
+    maxRowSlopeSpread: 0.3,
+
+    /** Com gravidade a vertical não é estimativa: as retas pesam mais. */
+    weightsWithGravity: { count: 0.15, line: 0.5, spread: 0.1, rows: 0.25 },
+    weightsWithoutGravity: { count: 0.15, line: 0.35, spread: 0.3, rows: 0.2 },
+  },
+
+  /** Uma divisão colada na borda do recorte é a borda, não uma divisão. */
+  dividerEdgeMargin: 0.01,
 };

@@ -3,29 +3,38 @@ import { Pressable, SafeAreaView, StyleSheet, Text, View, useColorScheme } from 
 
 import BenchScreen from './src/ui/BenchScreen';
 import CameraScreen from './src/ui/CameraScreen';
+import HistoryScreen from './src/ui/HistoryScreen';
 import { colors } from './src/ui/theme';
 
+const TABS = { camera: 'Câmera', history: 'Histórico', bench: 'Medição' } as const;
+type Tab = keyof typeof TABS;
+
 /**
- * As duas telas convivem: a do marco 1 continua útil como medição controlada
- * sobre entrada fixa, que é justamente o que a câmera não oferece.
+ * As telas convivem: a do marco 1 continua útil como medição controlada sobre
+ * entrada fixa, que é justamente o que a câmera não oferece.
+ *
+ * Trocar de aba desmonta a tela anterior — e a câmera para junto, que é o que
+ * a bateria pede.
  */
 export default function App() {
   const dark = useColorScheme() === 'dark';
   const c = dark ? colors.dark : colors.light;
-  const [tab, setTab] = useState<'camera' | 'bench'>('camera');
+  const [tab, setTab] = useState<Tab>('camera');
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
       <View style={[styles.tabs, { borderColor: c.line }]}>
-        {(['camera', 'bench'] as const).map((id) => (
+        {(Object.keys(TABS) as Tab[]).map((id) => (
           <Pressable key={id} onPress={() => setTab(id)} style={styles.tab}>
             <Text style={{ color: tab === id ? c.ink : c.muted, fontWeight: tab === id ? '700' : '500' }}>
-              {id === 'camera' ? 'Câmera' : 'Medição'}
+              {TABS[id]}
             </Text>
           </Pressable>
         ))}
       </View>
-      <View style={{ flex: 1 }}>{tab === 'camera' ? <CameraScreen /> : <BenchScreen />}</View>
+      <View style={{ flex: 1 }}>
+        {tab === 'camera' ? <CameraScreen /> : tab === 'history' ? <HistoryScreen /> : <BenchScreen />}
+      </View>
     </SafeAreaView>
   );
 }

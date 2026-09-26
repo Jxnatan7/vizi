@@ -179,6 +179,12 @@ export type OverlayStyle = {
   minConfidence: number;
   /** Cores "#RRGGBB". A atribuição por objeto é do nativo. */
   palette: string[];
+  /** Divisões entre livros sobre o resultado endireitado (FR-008). */
+  showDividers: boolean;
+  /** "#RRGGBB". */
+  dividerColor: string;
+  /** Pontos de tela: o resultado não está no espaço do modelo. */
+  dividerWidth: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -195,6 +201,44 @@ export type CaptureOptions = {
   transitionMs: number;
   /** Mostra o que o algoritmo inferiu em vez do resultado. */
   diagnostics: boolean;
+  /** O que decide em pé, fileira e confiança da geometria. */
+  geometry: GeometryTuning;
+  /** Divisões mais perto que isto das bordas do recorte são descartadas. */
+  dividerEdgeMargin: number;
+};
+
+/**
+ * Política da estimativa da estante. Estava fixa no Swift até a T037 deste
+ * marco; são os números que a grade e a releitura vão querer ajustar sem
+ * rebuild.
+ */
+export type GeometryTuning = {
+  /** Quanto uma lombada pode se afastar da vertical e ainda contar como em pé. */
+  standingToleranceDegrees: number;
+  /** Vão que separa duas fileiras, como fração da altura mediana dos livros. */
+  rowGapFactor: number;
+  /** Piso desse vão, como fração do lado da imagem. */
+  minRowGap: number;
+  /** Fileiras menores contam livros mas não entram na estimativa. */
+  minBooksPerRow: number;
+  /** Livros em pé que dão nota máxima ao sinal de contagem. */
+  fullConfidenceCount: number;
+  /** Resíduo médio das bases que zera o sinal da reta, como fração do lado. */
+  maxBaseResidual: number;
+  /** Dispersão angular das lombadas, em radianos, que zera o sinal. */
+  maxAngleSpread: number;
+  /** Diferença de inclinação entre fileiras que zera o sinal. */
+  maxRowSlopeSpread: number;
+  weightsWithGravity: ConfidenceWeights;
+  weightsWithoutGravity: ConfidenceWeights;
+};
+
+/** Peso de cada sinal na confiança da geometria (R15). */
+export type ConfidenceWeights = {
+  count: number;
+  line: number;
+  spread: number;
+  rows: number;
 };
 
 export type CaptureResult = {
@@ -202,7 +246,10 @@ export type CaptureResult = {
   straightened: boolean;
   /** Texto legível quando a correção foi recusada — FR-011. */
   declineReason: string;
+  /** A confiança da geometria (R15) — a que `minGeometryConfidence` compara. */
   geometryConfidence: number;
+  /** Nitidez do cruzamento entre a reta das bases e o horizonte. Diagnóstico. */
+  azimuthConfidence: number;
   /**
    * Uma entrada por fileira. Prateleiras de uma estante são coplanares, então
    * todas vêm da MESMA homografia — e duas ou mais retas de base dão o ponto
@@ -243,4 +290,35 @@ export type CaptureResult = {
   readyMs: number;
   photoWidth: number;
   photoHeight: number;
+};
+
+/** Política da gravação no histórico. */
+export type SaveResultOptions = {
+  /** Qualidade do JPEG, de 0 a 1. */
+  quality: number;
+};
+
+/** O que o nativo devolve ao gravar: onde ficou, nunca o que tem dentro. */
+export type SavedImage = {
+  /** O mesmo `imageId` da captura. */
+  id: string;
+  /** Relativo à pasta de documentos — o absoluto muda a cada reinstalação. */
+  file: string;
+  width: number;
+  height: number;
+  bytes: number;
+};
+
+/** Uma captura guardada (US4). Data e contagem bastam agora — ver a spec. */
+export type HistoryEntry = {
+  id: string;
+  /** Relativo à pasta de documentos. */
+  file: string;
+  count: number;
+  straightened: boolean;
+  /** Milissegundos desde a época. */
+  capturedAt: number;
+  /** Para exibir na proporção certa sem abrir a imagem. */
+  width: number;
+  height: number;
 };

@@ -26,6 +26,12 @@ export default {
         // câmera — sem diálogo, sem erro, só o app fechando.
         NSCameraUsageDescription:
           'O vizi usa a câmera para detectar e contar objetos em tempo real, no próprio aparelho.',
+
+        // Expõe a pasta de documentos — onde o histórico grava as faixas — no
+        // app Arquivos e para `ifuse --documents com.jxnatan7.vizi`. É por aí
+        // que as faixas chegam ao Colab, onde a releitura vai ser medida.
+        UIFileSharingEnabled: true,
+        LSSupportsOpeningDocumentsInPlace: true,
       },
     },
 
