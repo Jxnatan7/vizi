@@ -29,4 +29,17 @@ export const DEFAULT_OVERLAY: OverlayStyle = {
   dividerColor: '#FFFFFF',
   /** Pontos de tela, não pixels do modelo: o resultado tem outro tamanho. */
   dividerWidth: 2,
+
+  /**
+   * Faixa de interesse. O escurecimento diz o que não conta sem apagar a
+   * cena — a pessoa precisa ver a prateleira de cima para saber onde está.
+   */
+  bandDimOpacity: 0.55,
+  bandEdgeColor: '#FFFFFF',
+  /** Em pontos de tela, como as divisões. */
+  bandEdgeWidth: 1.5,
+  /** A alça é uma cápsula no meio de cada borda: o convite para puxar. */
+  bandHandleLength: 28,
+  bandHandleThickness: 5,
+  bandCountFontSize: 13,
 };

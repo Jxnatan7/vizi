@@ -10,6 +10,7 @@ import {
   type OverlayStyle,
   type TransformMode,
 } from '../../modules/vizi-vision';
+import { DEFAULT_BAND } from '../band/policy';
 import { DEFAULT_OVERLAY } from '../overlay/style';
 
 /** Política da sessão. Vive em TypeScript — princípio IV. */
@@ -19,6 +20,7 @@ export const DEFAULT_SESSION: SessionOptions = {
   transform: 'stretch',
   confidenceThreshold: 0.25,
   iouThreshold: 0.7,
+  band: DEFAULT_BAND,
 };
 
 export function useSession() {

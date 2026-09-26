@@ -18,6 +18,14 @@ struct OverlayStyle {
   var showDividers = true
   var dividerColor: CGColor = UIColor.white.cgColor
   var dividerWidth: CGFloat = 2
+  /// A faixa de interesse (spec 005): escurecimento fora dela, de 0 a 1, e
+  /// bordas, alças e contagem, em pontos de tela.
+  var bandDimOpacity: CGFloat = 0.55
+  var bandEdgeColor: CGColor = UIColor.white.cgColor
+  var bandEdgeWidth: CGFloat = 1.5
+  var bandHandleLength: CGFloat = 28
+  var bandHandleThickness: CGFloat = 5
+  var bandCountFontSize: CGFloat = 13
 
   static let defaultPalette: [CGColor] = [
     UIColor(red: 0.29, green: 0.78, blue: 0.62, alpha: 1).cgColor,
@@ -100,6 +108,15 @@ final class OverlayRenderer {
   var imageSide: CGFloat = 640
   weak var store: ResultStore?
 
+  /// A faixa de interesse (spec 005). O filtro age aqui, no desenho, e não na
+  /// publicação: no thread principal, com o estado que o gesto acabou de
+  /// escrever, a caixa troca no quadro exato em que a borda passa por ela (R21).
+  weak var band: BandModel?
+  private var lastBandGeneration: UInt64 = .max
+  /// Quantos membros da faixa havia no desenho — para a contagem junto a ela.
+  /// Todos, não só os acima de `minConfidence`: é a contagem que a captura dá.
+  var onMembers: ((Int) -> Void)?
+
   /// Custo do último desenho, lido pela telemetria (FR-006).
   private(set) var lastDrawMs: Double = 0
   /// Quantas instâncias o último desenho pintou. Diagnóstico.
@@ -151,6 +168,7 @@ final class OverlayRenderer {
     link?.invalidate()
     link = nil
     lastGeneration = .max
+    lastBandGeneration = .max
     boxPool.forEach { $0.isHidden = true }
     maskLayer.contents = nil
   }
@@ -160,18 +178,29 @@ final class OverlayRenderer {
   func resumeDrawing() {
     isHeld = false
     lastGeneration = .max
+    lastBandGeneration = .max
     tick()
   }
 
   @objc private func tick() {
     guard !isHeld, let store else { return }
     let snapshot = store.read()
-    // Nada novo desde o último desenho: não há por que repintar.
-    guard snapshot.generation != lastGeneration else { return }
+    let current = band?.read()
+    let bandGeneration = current?.generation ?? 0
+    // Nada novo desde o último desenho — nem resultado, nem faixa: não há por
+    // que repintar.
+    guard snapshot.generation != lastGeneration || bandGeneration != lastBandGeneration else {
+      return
+    }
     lastGeneration = snapshot.generation
+    lastBandGeneration = bandGeneration
 
     let started = CFAbsoluteTimeGetCurrent()
-    let visible = snapshot.instances.filter { $0.score >= style.minConfidence }
+    let members = current.map {
+      $0.band.members(of: snapshot.instances, imageSide: Float(imageSide),
+                      membership: $0.policy.membership)
+    } ?? snapshot.instances
+    let visible = members.filter { $0.score >= style.minConfidence }
 
     // Sem animação implícita: a 60 Hz, interpolar entre estados produziria
     // arrasto em vez de acompanhamento.
@@ -183,6 +212,7 @@ final class OverlayRenderer {
 
     lastDrawnCount = visible.count
     lastDrawMs = (CFAbsoluteTimeGetCurrent() - started) * 1000
+    onMembers?(members.count)
   }
 
   // MARK: - Máscaras

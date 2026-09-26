@@ -84,6 +84,14 @@ struct OverlayStyleRecord: Record {
   @Field var dividerColor: String = "#FFFFFF"
   /// Em pontos de tela.
   @Field var dividerWidth: Double = 2
+  /// Faixa de interesse: escurecimento de 0 a 1; o resto em pontos de tela.
+  @Field var bandDimOpacity: Double = 0.55
+  /// "#RRGGBB".
+  @Field var bandEdgeColor: String = "#FFFFFF"
+  @Field var bandEdgeWidth: Double = 1.5
+  @Field var bandHandleLength: Double = 28
+  @Field var bandHandleThickness: Double = 5
+  @Field var bandCountFontSize: Double = 13
 }
 
 struct SessionOptions: Record {
@@ -91,6 +99,29 @@ struct SessionOptions: Record {
   @Field var transform: String = "stretch"
   @Field var confidenceThreshold: Double = 0.25
   @Field var iouThreshold: Double = 0.7
+  /// A faixa de interesse. A sessão começa por ela (spec 005, FR-002).
+  @Field var band: BandPolicyRecord = BandPolicyRecord()
+}
+
+/// Comportamento da faixa de interesse. Vira `BandPolicy`.
+///
+/// **Defaults inválidos de propósito**, como os da T037 da 004: o TypeScript
+/// sempre envia todos os campos. Zerada, a faixa nasce sem espessura — o
+/// defeito aparece na primeira sessão, em vez de a faixa rodar com um valor
+/// plausível e defasado.
+struct BandPolicyRecord: Record {
+  @Field var defaultThickness: Double = 0
+  @Field var minThickness: Double = 0
+  @Field var membership: Double = 0
+  @Field var flipHysteresisDegrees: Double = 0
+  @Field var offMargin: Double = 0
+  @Field var rubberBand: Double = 0
+  @Field var startSlopPoints: Double = 0
+  @Field var edgeGrabPoints: Double = 0
+  @Field var countWindowMs: Double = 0
+  @Field var springResponse: Double = 0
+  @Field var springDamping: Double = 0
+  @Field var haptics: Bool = false
 }
 
 public class ViziVisionModule: Module {
@@ -115,7 +146,9 @@ public class ViziVisionModule: Module {
 
     // Emitido a ~2 Hz. Um evento por frame seriam 60 travessias por segundo e
     // 60 re-renders — princípios II e III violados de uma vez.
-    Events("onTelemetry")
+    // `onBandChange` só em mudança discreta da faixa — nunca durante o
+    // arrasto (spec 005, princípio III).
+    Events("onTelemetry", "onBandChange")
 
     Function("probe") { () -> [String: Any] in
       let info = ProcessInfo.processInfo
@@ -209,13 +242,26 @@ public class ViziVisionModule: Module {
       // Configuração vai para o sink, não para a view: ela ainda não existe
       // neste instante, e só nasce quando o JSX reage ao retorno desta função.
       PreviewSink.shared.store = self.coordinator.results
+      PreviewSink.shared.band = self.coordinator.band
       PreviewSink.shared.imageSide = CGFloat(self.engine.inputWidth)
       PreviewSink.shared.active = true
-      return try self.coordinator.start(
+      self.coordinator.band.onChange = { [weak self] band in
+        self?.sendEvent("onBandChange", band.dictionary)
+      }
+      let info = try self.coordinator.start(
         sampleIntervalMs: options.sampleIntervalMs,
         mode: TransformMode(rawValue: options.transform) ?? .stretch,
         confidenceThreshold: Float(options.confidenceThreshold),
-        iouThreshold: Float(options.iouThreshold))
+        iouThreshold: Float(options.iouThreshold),
+        bandPolicy: BandPolicy(options.band))
+      // O JavaScript espelha a faixa desde o primeiro frame. Se a view já
+      // existir, ela recomeça no centro junto.
+      self.coordinator.band.commit()
+      PreviewSink.shared.onView {
+        $0.applyBand(animated: false)
+        $0.setBandVisible(true, animated: false)
+      }
+      return info
     }
 
     AsyncFunction("setTransform") { (transform: String) in
@@ -233,6 +279,14 @@ public class ViziVisionModule: Module {
       let imageId = UUID().uuidString
       self.dropResult()
 
+      // A faixa do instante do toque vale para a captura inteira: mexer nela
+      // durante a foto não muda o que já foi decidido (spec 005). A faixa sai
+      // de cena, e o gesto desliga junto (FR-020).
+      let bandAtTouch = self.coordinator.band.read()
+      let bandSide = Float(self.engine.inputWidth)
+      let membership = bandAtTouch.policy.membership
+      PreviewSink.shared.onView { $0.setBandVisible(false, animated: true) }
+
       // Congela ANTES de qualquer reconfiguração: a tela precisa segurar a
       // última imagem enquanto o formato é trocado (FR-009).
       // Congela imagem E overlay juntos. Separá-los mostraria caixas de um
@@ -247,7 +301,9 @@ public class ViziVisionModule: Module {
         let still = CIImage(cvPixelBuffer: frozen)
         if let image = self.ciContext.createCGImage(still, from: still.extent) {
           let focus = ViziVisionModule.focus(
-            of: self.coordinator.results.read().instances,
+            of: bandAtTouch.band.members(
+              of: self.coordinator.results.read().instances,
+              imageSide: bandSide, membership: membership),
             side: Double(self.engine.inputWidth), margin: options.cropMargin)
           PreviewSink.shared.onView {
             $0.result.begin(frame: image, focus: focus, durationMs: options.approachMs)
@@ -266,6 +322,13 @@ public class ViziVisionModule: Module {
           on: square,
           confidenceThreshold: self.coordinator.confidenceThreshold,
           iouThreshold: self.coordinator.iouThreshold)
+
+        // Só os objetos da faixa daqui em diante — contagem, geometria, recorte
+        // e overlay (FR-006). A faixa vale para a foto como para o ao vivo: as
+        // duas passaram pela mesma transformação para o espaço canônico.
+        let instances = bandAtTouch.band.members(
+          of: result.instances, imageSide: bandSide, membership: membership)
+        let outsideBandCount = result.instances.count - instances.count
 
         // As detecções da FOTO substituem as do último frame ao vivo. As
         // coordenadas são comparáveis: as duas passaram pela mesma
@@ -311,7 +374,7 @@ public class ViziVisionModule: Module {
             canonicalSide: Double(side))
 
           let estimate = ShelfGeometry.estimate(
-            instances: result.instances,
+            instances: instances,
             protos: protos,
             imageSide: side,
             gravity: gravity,
@@ -347,7 +410,7 @@ public class ViziVisionModule: Module {
           // Canônico (640×640) → retrato. Esticamento alinhado aos eixos.
           let kx = portrait.extent.width / CGFloat(side)
           let ky = portrait.extent.height / CGFloat(side)
-          let region = result.instances.flatMap { inst -> [CGPoint] in
+          let region = instances.flatMap { inst -> [CGPoint] in
             [CGPoint(x: CGFloat(inst.x) * kx, y: CGFloat(inst.y) * ky),
              CGPoint(x: CGFloat(inst.x + inst.width) * kx,
                      y: CGFloat(inst.y + inst.height) * ky)]
@@ -446,7 +509,7 @@ public class ViziVisionModule: Module {
                 let edge = options.dividerEdgeMargin
                 shelves = rowsForShelves.compactMap { row -> Rectify.Shelf? in
                   let members = row.indices.compactMap {
-                    result.instances.indices.contains($0) ? result.instances[$0] : nil
+                    instances.indices.contains($0) ? instances[$0] : nil
                   }
                   guard !members.isEmpty else { return nil }
                   let ordered = members.sorted { $0.x < $1.x }
@@ -494,7 +557,7 @@ public class ViziVisionModule: Module {
           self.coordinator.results.publishOverriding(instances: [], protos: nil)
         } else {
           self.coordinator.results.publishOverriding(
-            instances: result.instances, protos: result.protos)
+            instances: instances, protos: result.protos)
         }
 
         // Segunda metade da transição. Ela termina exatamente sobre a imagem
@@ -520,7 +583,7 @@ public class ViziVisionModule: Module {
         }
 
         return [
-          "count": result.instances.count,
+          "count": instances.count,
           "straightened": straightened,
           "declineReason": declineReason,
           "geometryConfidence": confidence,
@@ -535,12 +598,15 @@ public class ViziVisionModule: Module {
           "readyMs": (CFAbsoluteTimeGetCurrent() - touchedAt) * 1000,
           "photoWidth": CVPixelBufferGetWidth(shot.buffer),
           "photoHeight": CVPixelBufferGetHeight(shot.buffer),
-          "instances": result.instances.count,
+          "instances": instances.count,
+          "outsideBandCount": outsideBandCount,
         ]
       } catch {
         PreviewSink.shared.onView {
           $0.result.teardown()
           $0.clearDividers()
+          // Sem resultado, a faixa volta como estava.
+          $0.setBandVisible(true, animated: true)
         }
         PreviewSink.shared.frozen = false
         self.coordinator.results.setPaused(false)
@@ -598,6 +664,14 @@ public class ViziVisionModule: Module {
       if let color = UIColor(hex: record.dividerColor)?.cgColor {
         style.dividerColor = color
       }
+      style.bandDimOpacity = CGFloat(record.bandDimOpacity)
+      if let color = UIColor(hex: record.bandEdgeColor)?.cgColor {
+        style.bandEdgeColor = color
+      }
+      style.bandEdgeWidth = CGFloat(record.bandEdgeWidth)
+      style.bandHandleLength = CGFloat(record.bandHandleLength)
+      style.bandHandleThickness = CGFloat(record.bandHandleThickness)
+      style.bandCountFontSize = CGFloat(record.bandCountFontSize)
       // Trocar estilo não pode custar um frame nem depender da view existir.
       PreviewSink.shared.style = style
     }
@@ -711,6 +785,24 @@ private extension ShelfGeometry.Tuning {
 private extension ShelfGeometry.Weights {
   init(_ r: ConfidenceWeightsRecord) {
     self.init(count: r.count, line: r.line, spread: r.spread, rows: r.rows)
+  }
+}
+
+private extension BandPolicy {
+  init(_ r: BandPolicyRecord) {
+    self.init(
+      defaultThickness: r.defaultThickness,
+      minThickness: r.minThickness,
+      membership: r.membership,
+      flipHysteresisDegrees: r.flipHysteresisDegrees,
+      offMargin: r.offMargin,
+      rubberBand: r.rubberBand,
+      startSlopPoints: r.startSlopPoints,
+      edgeGrabPoints: r.edgeGrabPoints,
+      countWindowMs: r.countWindowMs,
+      springResponse: r.springResponse,
+      springDamping: r.springDamping,
+      haptics: r.haptics)
   }
 }
 

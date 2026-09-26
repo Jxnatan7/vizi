@@ -100,6 +100,8 @@ export type SessionOptions = {
   transform: TransformMode;
   confidenceThreshold: number;
   iouThreshold: number;
+  /** A faixa de interesse. A sessão começa por ela — spec 005, FR-002. */
+  band: BandPolicy;
 };
 
 export type SessionInfo = {
@@ -185,6 +187,15 @@ export type OverlayStyle = {
   dividerColor: string;
   /** Pontos de tela: o resultado não está no espaço do modelo. */
   dividerWidth: number;
+  /** Faixa de interesse: o escurecimento fora dela, de 0 a 1. */
+  bandDimOpacity: number;
+  /** "#RRGGBB". Bordas, alças e o texto da contagem. */
+  bandEdgeColor: string;
+  /** As medidas da faixa são em pontos de tela. */
+  bandEdgeWidth: number;
+  bandHandleLength: number;
+  bandHandleThickness: number;
+  bandCountFontSize: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -290,6 +301,45 @@ export type CaptureResult = {
   readyMs: number;
   photoWidth: number;
   photoHeight: number;
+  /**
+   * Detecções da foto descartadas pela faixa. Com `count` zero e isto maior
+   * que zero, não há livros **na faixa** — não é a cena que está vazia.
+   */
+  outsideBandCount: number;
+};
+
+// ---------------------------------------------------------------------------
+// Spec 005 — faixa de interesse
+// ---------------------------------------------------------------------------
+
+export type BandMode = 'off' | 'horizontal' | 'vertical';
+
+/** O estado da faixa. O nativo é o dono; o JavaScript espelha. */
+export type BandState = {
+  mode: BandMode;
+  /** No eixo em que a faixa anda, de 0 a 1. */
+  center: number;
+  /** Fração da imagem nesse eixo, de 0 a 1. */
+  thickness: number;
+};
+
+/**
+ * Comportamento da faixa. Vive em TypeScript — princípio IV. Os valores
+ * iniciais e o que cada um decide estão no data-model da 005.
+ */
+export type BandPolicy = {
+  defaultThickness: number;
+  minThickness: number;
+  membership: number;
+  flipHysteresisDegrees: number;
+  offMargin: number;
+  rubberBand: number;
+  startSlopPoints: number;
+  edgeGrabPoints: number;
+  countWindowMs: number;
+  springResponse: number;
+  springDamping: number;
+  haptics: boolean;
 };
 
 /** Política da gravação no histórico. */

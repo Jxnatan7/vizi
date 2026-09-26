@@ -1,7 +1,7 @@
 import { NativeModule, requireNativeModule } from 'expo';
 
 import type {
-  BenchmarkOptions, ModelInfo, NativeProbe, RawMeasurement,
+  BandMode, BandState, BenchmarkOptions, ModelInfo, NativeProbe, RawMeasurement,
   CaptureOptions, CaptureResult, OverlayStyle, SavedImage, SaveResultOptions,
   Session, SessionInfo, SessionOptions, TelemetrySample, TransformMode,
 } from './ViziVision.types';
@@ -9,6 +9,11 @@ import type {
 type Events = {
   /** ~2 Hz. Nunca por frame — ver contracts/camera-session.md. */
   onTelemetry(sample: TelemetrySample): void;
+  /**
+   * Só em mudança discreta: fim de gesto, troca de modo, volta ao centro,
+   * começo de sessão. Nunca durante o arrasto — spec 005, princípio III.
+   */
+  onBandChange(state: BandState): void;
 };
 
 declare class ViziVisionModule extends NativeModule<Events> {
@@ -29,6 +34,9 @@ declare class ViziVisionModule extends NativeModule<Events> {
   dismissResult(): Promise<void>;
   /** Grava o resultado que está na tela. O índice é do TypeScript. */
   saveResult(options: SaveResultOptions): Promise<SavedImage>;
+
+  /** A cápsula. Animado e com retorno tátil no nativo; `onBandChange` no fim. */
+  setBandMode(mode: BandMode): Promise<void>;
 }
 
 export default requireNativeModule<ViziVisionModule>('ViziVision');

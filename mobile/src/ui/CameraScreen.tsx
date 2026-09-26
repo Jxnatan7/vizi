@@ -34,6 +34,22 @@ export default function CameraScreen() {
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: c.bg }]}>
       <StatusBar style={dark ? 'light' : 'dark'} />
+      {info && (
+        // Fixo, fora da ScrollView: arrastar a faixa nunca rola a tela (spec
+        // 005, FR-018) — e um visor que rola para fora nunca foi o que uma
+        // câmera faz.
+        <View style={styles.stage}>
+          {/* O que o modelo recebe, não a câmera crua. Imagem deitada ou
+              objetos distorcidos aparecem aqui antes de virar meia tarde de
+              investigação. */}
+          <View style={[styles.preview, { borderColor: c.line }]}>
+            <PreviewView style={StyleSheet.absoluteFill} />
+          </View>
+          <Text style={[styles.caption, { color: c.muted }]}>
+            Entrada do modelo · {transform}
+          </Text>
+        </View>
+      )}
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={[styles.eyebrow, { color: c.muted }]}>MARCO 2 · CÂMERA</Text>
         <Text style={[styles.title, { color: c.ink }]}>vizi</Text>
@@ -51,20 +67,6 @@ export default function CameraScreen() {
           <Card c={c} border={c.crit} label="ERRO">
             <Text style={{ color: c.ink, fontFamily: 'Menlo', fontSize: 13 }}>{error}</Text>
           </Card>
-        )}
-
-        {info && (
-          <>
-            {/* O que o modelo recebe, não a câmera crua. Imagem deitada ou
-                objetos distorcidos aparecem aqui antes de virar meia tarde de
-                investigação. */}
-            <View style={[styles.preview, { borderColor: c.line }]}>
-              <PreviewView style={StyleSheet.absoluteFill} />
-            </View>
-            <Text style={[styles.caption, { color: c.muted }]}>
-              Entrada do modelo · {transform}
-            </Text>
-          </>
         )}
 
         {info && (
@@ -124,6 +126,14 @@ export default function CameraScreen() {
         {state === 'result' && result && (
           <Card c={c} border={c.ok} label="RESULTADO">
             <Row c={c} label="livros" value={String(result.count)} strong />
+            {/* Vazia é a faixa, não a cena: dizer "nenhum livro" mandaria a
+                pessoa procurar o problema no lugar errado (spec 005, US1). */}
+            {result.count === 0 && result.outsideBandCount > 0 && (
+              <Text style={{ color: c.warn, fontSize: 13, lineHeight: 18 }}>
+                Nenhum livro na faixa — {result.outsideBandCount} fora dela.
+              </Text>
+            )}
+            <Row c={c} label="fora da faixa" value={String(result.outsideBandCount)} />
             <Row c={c} label="foto" value={`${result.photoWidth}×${result.photoHeight}`} />
             <Row c={c} label="tempo" value={`${result.elapsedMs.toFixed(0)} ms`} strong />
             <Row c={c} label="toque → pronto" value={`${result.readyMs.toFixed(0)} ms`} strong />
@@ -239,6 +249,7 @@ const TOGGLES = [
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   content: { padding: 24, gap: 14 },
+  stage: { paddingHorizontal: 24, paddingTop: 12, gap: 14 },
   eyebrow: { fontSize: 11, letterSpacing: 1.4, fontWeight: '600' },
   title: { fontSize: 34, fontWeight: '700', letterSpacing: -0.5, marginTop: -8 },
   banner: { borderWidth: 1, borderLeftWidth: 3, borderRadius: 4, padding: 12 },

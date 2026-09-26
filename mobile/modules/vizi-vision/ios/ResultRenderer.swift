@@ -181,7 +181,12 @@ final class ResultRenderer {
   /// Parte de onde a transição estiver — inclusive do meio da ida, se a
   /// pessoa voltar antes de ela terminar.
   func dismiss(durationMs: Int) {
-    guard let host, let stage, let card else { return }
+    guard let host, let stage, let card else {
+      // Sem transição a desfazer — a captura não teve frame congelado. A
+      // faixa de interesse volta mesmo assim, ou ficaria escondida.
+      self.host?.resultDidEnd()
+      return
+    }
     epoch &+= 1
     let token = epoch
     let duration = Self.seconds(durationMs)
@@ -192,6 +197,9 @@ final class ResultRenderer {
     CATransaction.setCompletionBlock { [weak self] in
       guard let self, self.epoch == token else { return }
       self.teardown()
+      // A faixa reaparece só quando a volta termina: antes, ela cobriria a
+      // transição (spec 005, R27).
+      self.host?.resultDidEnd()
     }
 
     stage.isHidden = false

@@ -37,14 +37,42 @@ final class PreviewView: ExpoView {
   /// overlay.
   var resultStyle = OverlayStyle() { didSet { drawDividers() } }
 
+  /// A faixa de interesse (spec 005): desenho e gesto moram aqui, como a
+  /// transição — o que anda no ritmo do dedo não passa pelo React.
+  let bandRenderer = BandRenderer()
+  private lazy var bandGesture: BandGestureRecognizer = {
+    let recognizer = BandGestureRecognizer()
+    recognizer.host = self
+    return recognizer
+  }()
+
+  /// O estado da faixa. Chega pelo `PreviewSink`, como o `store`.
+  ///
+  /// Só redesenha quando o modelo muda de fato: o `configure` do sink roda a
+  /// cada troca de estilo, e reaplicar ali cortaria uma mola no meio.
+  var bandModel: BandModel? {
+    didSet { if bandModel !== oldValue { applyBand(animated: false) } }
+  }
+
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     displayLayer.videoGravity = .resizeAspect
     layer.addSublayer(displayLayer)
+    // O escurecimento fica abaixo do overlay: livro que conta aparece aceso,
+    // mesmo onde passa da borda da faixa.
+    layer.addSublayer(bandRenderer.dimLayer)
     overlay.attach(to: layer)
     dividerLayer.fillColor = nil
     dividerLayer.lineCap = .round
     layer.addSublayer(dividerLayer)
+    // Bordas, alças e contagem por cima de tudo — menos da transição, que é
+    // acrescentada depois.
+    for control in [bandRenderer.edgeLayer, bandRenderer.handleLayer,
+                    bandRenderer.countPill] as [CALayer] {
+      layer.addSublayer(control)
+    }
+    overlay.onMembers = { [weak self] count in self?.bandRenderer.updateCount(count) }
+    addGestureRecognizer(bandGesture)
     backgroundColor = .black
     PreviewSink.shared.view = self
   }
@@ -62,8 +90,32 @@ final class PreviewView: ExpoView {
     dividerLayer.frame = bounds
     drawDividers()
     let scale = max(1, traitCollection.displayScale)
+    bandRenderer.layout(image: bandImageRect, bounds: bounds, scale: scale)
     PreviewSink.shared.stagePixels = CGSize(
       width: bounds.width * scale, height: bounds.height * scale)
+  }
+
+  // MARK: - Faixa de interesse
+
+  /// Leva o desenho ao estado do modelo: no começo da sessão, ou quando o modo
+  /// muda por fora do gesto.
+  func applyBand(animated: Bool) {
+    guard let bandModel else { return }
+    let snapshot = bandModel.read()
+    bandRenderer.configure(policy: snapshot.policy)
+    bandRenderer.apply(snapshot.band, animated: animated)
+  }
+
+  /// Some na captura e no resultado (FR-020), e o gesto desliga junto: mexer
+  /// na faixa ali mudaria um estado que a captura já leu.
+  func setBandVisible(_ visible: Bool, animated: Bool) {
+    bandRenderer.setVisible(visible, animated: animated)
+    bandGesture.isEnabled = visible
+  }
+
+  /// A volta do resultado terminou: a faixa reaparece como estava (R27).
+  func resultDidEnd() {
+    setBandVisible(true, animated: true)
   }
 
   // MARK: - Divisões
@@ -127,10 +179,13 @@ final class PreviewView: ExpoView {
   }
 
   /// Devolve o overlay à view, por baixo da transição, e redesenha na hora.
+  ///
+  /// Acima do escurecimento da faixa, não do vídeo: por baixo dele, as caixas
+  /// dos livros que contam voltariam apagadas depois da primeira captura.
   func reclaimOverlay() {
     guard overlayLent else { return }
     overlayLent = false
-    overlay.attach(to: layer, above: displayLayer)
+    overlay.attach(to: layer, above: bandRenderer.dimLayer)
     overlay.layout(bounds)
     overlay.resumeDrawing()
   }
@@ -175,6 +230,31 @@ final class PreviewView: ExpoView {
   }
 }
 
+extension PreviewView: BandGestureHost {
+  /// O quadrado da imagem canônica dentro da view — o mesmo que o
+  /// `resizeAspect` da camada de vídeo mostra, e onde a faixa vive.
+  var bandImageRect: CGRect {
+    AVMakeRect(aspectRatio: CGSize(width: 1, height: 1), insideRect: bounds)
+  }
+
+  var bandPolicy: BandPolicy { bandModel?.read().policy ?? .unset }
+
+  func beginBandGesture() -> Band? {
+    guard let bandModel, bandModel.read().band.mode != .off else { return nil }
+    bandRenderer.feedback.prepare()
+    return bandRenderer.freezeAtPresentation()
+  }
+
+  func moveBand(to band: Band) {
+    bandModel?.write(band)
+    bandRenderer.apply(band, animated: false)
+  }
+
+  func endBandGesture() {
+    bandModel?.commit()
+  }
+}
+
 /// Ponte entre a fila da câmera e a view, que o React monta e desmonta quando
 /// quiser.
 ///
@@ -188,6 +268,9 @@ final class PreviewSink {
 
   weak var view: PreviewView? { didSet { configure() } }
   var store: ResultStore? { didSet { configure() } }
+  /// A faixa de interesse. Guardada como o `store`: a view nasce depois da
+  /// sessão e se configura com ela ao nascer.
+  var band: BandModel? { didSet { configure() } }
   var imageSide: CGFloat = 640 { didSet { configure() } }
   var style = OverlayStyle() { didSet { configure() } }
   var active = false { didSet { configure() } }
@@ -261,7 +344,10 @@ final class PreviewSink {
     view.overlay.store = store
     view.overlay.imageSide = imageSide
     view.overlay.style = style
+    view.overlay.band = band
     view.resultStyle = style
+    view.bandRenderer.style = style
+    view.bandModel = band
     if active { view.overlay.start() } else { view.overlay.stop() }
   }
 }

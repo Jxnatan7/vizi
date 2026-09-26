@@ -16,6 +16,9 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
   let attitude = DeviceAttitude()
   private let telemetry = Telemetry()
   let results = ResultStore()
+  /// A faixa de interesse (spec 005). O gesto escreve; a contagem da
+  /// telemetria, o overlay e a captura leem.
+  let band = BandModel()
 
   /// Carregado pelo módulo antes de iniciar a sessão.
   weak var engine: InferenceEngine?
@@ -70,13 +73,17 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
   // MARK: - Ciclo de vida
 
   func start(sampleIntervalMs: Int, mode: TransformMode,
-             confidenceThreshold: Float, iouThreshold: Float) throws -> [String: Any] {
+             confidenceThreshold: Float, iouThreshold: Float,
+             bandPolicy: BandPolicy) throws -> [String: Any] {
     gate.reset()
     telemetry.reset()
     captureMarks.removeAll()
     self.mode = mode
     self.confidenceThreshold = confidenceThreshold
     self.iouThreshold = iouThreshold
+    // Toda sessão começa com a faixa no centro (FR-002), antes do primeiro
+    // frame — é por isso que a política chega junto com a sessão.
+    band.reset(policy: bandPolicy)
     resetWindow()
     camera.delegate = self
     try camera.configure(minSide: engine?.inputWidth ?? 640)
@@ -251,14 +258,25 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
     let e2e = (now - frame.presentationTime).seconds * 1000
 
     // Publica e segue. Quem desenha lê quando quiser — o princípio I.
+    //
+    // Publica TODAS as detecções: quem consome filtra pela faixa (R21). O
+    // desenho precisa do estado mais recente dela, e o diagnóstico, das
+    // descartadas.
     results.publish(instances: result.instances, protos: result.protos)
+
+    // A contagem da telemetria é a da faixa: é o que a tela mostra e o que a
+    // captura vai contar.
+    let current = band.read()
+    let counted = current.band.members(
+      of: result.instances, imageSide: Float(side),
+      membership: current.policy.membership).count
 
     statsLock.lock()
     transformMs.append(transformElapsed)
     inferMs.append(result.modelMs)
     decodeMs.append(result.decodeMs)
     e2eMs.append(e2e)
-    lastInstanceCount = result.instances.count
+    lastInstanceCount = counted
     statsLock.unlock()
   }
 
