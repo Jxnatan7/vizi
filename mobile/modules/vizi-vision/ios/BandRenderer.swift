@@ -68,10 +68,23 @@ final class BandRenderer {
 
   /// Leva a faixa a `next`. Animado, é uma mola partindo de onde ela está na
   /// tela — também quando uma mola anterior ainda não terminou.
-  func apply(_ next: Band, animated: Bool) {
+  ///
+  /// Desligar é a faixa se abrindo até a moldura, com bordas, alças e contagem
+  /// sumindo; ligar é a moldura se fechando até a faixa (FR-017).
+  ///
+  /// - Parameter completion: quando a mola chega — ou é cortada por outra, ou
+  ///   por um gesto. Sem animação, logo depois de desenhar.
+  func apply(_ next: Band, animated: Bool, completion: (() -> Void)? = nil) {
+    // Desligada, a faixa é a moldura em qualquer orientação. Religando na
+    // outra, ela parte da moldura já no eixo novo: a mola só fecha, não vira.
+    let reorient = band.mode == .off && next.mode != .off && next.mode != orientation
     let oldDim = (dimLayer.presentation() ?? dimLayer).path
-    let oldEdges = (edgeLayer.presentation() ?? edgeLayer).path
-    let oldHandles = (handleLayer.presentation() ?? handleLayer).path
+    let oldEdges = reorient
+      ? edgePath(image, vertical: next.mode == .vertical)
+      : (edgeLayer.presentation() ?? edgeLayer).path
+    let oldHandles = reorient
+      ? handlePath(image, vertical: next.mode == .vertical)
+      : (handleLayer.presentation() ?? handleLayer).path
     let oldPill = (countPill.presentation() ?? countPill).position
 
     band = next
@@ -85,6 +98,7 @@ final class BandRenderer {
 
     CATransaction.begin()
     CATransaction.setDisableActions(true)
+    CATransaction.setCompletionBlock(completion)
     dimLayer.path = dim
     edgeLayer.path = edges
     handleLayer.path = handles

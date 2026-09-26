@@ -84,11 +84,11 @@ Caminhos relativos a `mobile/`.
 
 **Independent Test**: desligar a faixa e conferir que caixas, contagem e captura voltam a considerar a imagem toda.
 
-- [ ] T023 [US2] Em `modules/vizi-vision/ios/BandRenderer.swift`: desligar é a faixa se abrindo até a moldura, com bordas, alças e contagem sumindo; ligar é a moldura se fechando até a faixa (FR-017, R20)
-- [ ] T024 [US2] `AsyncFunction("setBandMode")` em `modules/vizi-vision/ios/ViziVisionModule.swift`: transição por `BandModel.setMode`, animada pelo `BandRenderer` na thread de interface, com retorno tátil, e `onBandChange` ao terminar — tabela do `setBandMode` em `contracts/band.md`
-- [ ] T025 [P] [US2] Criar `src/band/useBand.ts`: espelha `onBandChange` num estado de React, escrito só em mudança discreta, e expõe `setMode`
-- [ ] T026 [P] [US2] Criar `src/ui/BandControl.tsx`: cápsula com três botões — imagem toda · horizontal · vertical —, destaque que desliza com `Animated` e driver nativo, e rótulo e estado para o leitor de tela (FR-011, FR-021)
-- [ ] T027 [US2] Em `src/ui/CameraScreen.tsx`, a cápsula logo abaixo do preview, fora da `ScrollView`, escondida durante captura e resultado
+- [X] T023 [US2] Em `modules/vizi-vision/ios/BandRenderer.swift`: desligar é a faixa se abrindo até a moldura, com bordas, alças e contagem sumindo; ligar é a moldura se fechando até a faixa (FR-017, R20)
+- [X] T024 [US2] `AsyncFunction("setBandMode")` em `modules/vizi-vision/ios/ViziVisionModule.swift`: transição por `BandModel.setMode`, animada pelo `BandRenderer` na thread de interface, com retorno tátil, e `onBandChange` ao terminar — tabela do `setBandMode` em `contracts/band.md`
+- [X] T025 [P] [US2] Criar `src/band/useBand.ts`: espelha `onBandChange` num estado de React, escrito só em mudança discreta, e expõe `setMode`
+- [X] T026 [P] [US2] Criar `src/ui/BandControl.tsx`: cápsula com três botões — imagem toda · horizontal · vertical —, destaque que desliza com `Animated` e driver nativo, e rótulo e estado para o leitor de tela (FR-011, FR-021)
+- [X] T027 [US2] Em `src/ui/CameraScreen.tsx`, a cápsula logo abaixo do preview, fora da `ScrollView`, escondida durante captura e resultado
 - [ ] T028 [US2] 🚦 **SC-006** conforme `specs/005-faixa-interesse/quickstart.md`, item 9: com a faixa desligada, a contagem da foto fica dentro de ±10% da mediana ao vivo, na mesma cena
 
 **Checkpoint**: dá para voltar à imagem toda e religar onde estava.
@@ -102,7 +102,7 @@ Caminhos relativos a `mobile/`.
 **Independent Test**: ajustar a faixa a uma prateleira baixa e a uma alta; cada uma coberta, sem invadir a vizinha.
 
 - [ ] T029 [US3] Em `modules/vizi-vision/ios/BandGesture.swift`, agarrar uma borda — área de `edgeGrabPoints` para cada lado da linha — move só aquela borda, respeitando `minThickness` (FR-008)
-- [ ] T030 [US3] Em `modules/vizi-vision/ios/BandGesture.swift`, dois dedos: pinça em torno do ponto médio — espessura escala com a distância, centro acompanha o ponto médio —, sem salto no toque; passagens de um para dois dedos e de dois para um refazem a referência, também sem salto (FR-009, R22)
+- [X] T030 [US3] Em `modules/vizi-vision/ios/BandGesture.swift`, dois dedos: pinça em torno do ponto médio — espessura escala com a distância, centro acompanha o ponto médio —, sem salto no toque; passagens de um para dois dedos e de dois para um refazem a referência, também sem salto (FR-009, R22)
 - [ ] T031 [US3] Em `modules/vizi-vision/ios/BandGesture.swift`, elástico além dos limites (`rubberBand`), mola de volta ao soltar, e impacto leve na primeira vez que encosta num limite ou na espessura mínima (FR-014, FR-016)
 - [ ] T032 [US3] Em `modules/vizi-vision/ios/PreviewView.swift`, dois toques dentro da faixa a devolvem ao centro e à `defaultThickness`, na mesma orientação, com mola e retorno tátil (FR-013)
 - [ ] T033 [US3] Em `modules/vizi-vision/ios/BandGesture.swift`, dois dedos com a faixa desligada a criam entre eles, orientada pelo eixo; as duas bordas além da imagem por mais de `offMargin` a desligam, e voltar os dedos no mesmo gesto a faz renascer (FR-012 — os cenários 2 e 3 da US2)

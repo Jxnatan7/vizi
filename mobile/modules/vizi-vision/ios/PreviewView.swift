@@ -53,6 +53,10 @@ final class PreviewView: ExpoView {
   var bandModel: BandModel? {
     didSet { if bandModel !== oldValue { applyBand(animated: false) } }
   }
+  /// Muda a cada troca de modo e a cada gesto. Uma mola só avisa o JavaScript
+  /// ao chegar se ninguém a substituiu no caminho — como o `epoch` da
+  /// `ResultRenderer`.
+  private var bandTransition: UInt64 = 0
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -72,6 +76,8 @@ final class PreviewView: ExpoView {
       layer.addSublayer(control)
     }
     overlay.onMembers = { [weak self] count in self?.bandRenderer.updateCount(count) }
+    // Sem isto a view só recebe o primeiro dedo, e a pinça nunca começa.
+    isMultipleTouchEnabled = true
     addGestureRecognizer(bandGesture)
     backgroundColor = .black
     PreviewSink.shared.view = self
@@ -104,6 +110,27 @@ final class PreviewView: ExpoView {
     let snapshot = bandModel.read()
     bandRenderer.configure(policy: snapshot.policy)
     bandRenderer.apply(snapshot.band, animated: animated)
+  }
+
+  /// Uma troca de modo pela cápsula (`setBandMode`): a faixa vai numa mola,
+  /// com retorno tátil, e quem espelha só fica sabendo quando ela chega —
+  /// nunca no meio do caminho (contrato da 005).
+  ///
+  /// O modelo já está no destino; isto só anima e avisa.
+  func transitionBand(to band: Band) {
+    // Um dedo segurando a faixa escreveria por cima da troca no quadro
+    // seguinte: o gesto acaba aqui, e a troca vale.
+    if bandGesture.state == .began || bandGesture.state == .changed {
+      bandGesture.isEnabled = false
+      bandGesture.isEnabled = true
+    }
+    bandTransition &+= 1
+    let token = bandTransition
+    bandRenderer.feedback.changed()
+    bandRenderer.apply(band, animated: true) { [weak self] in
+      guard let self, self.bandTransition == token else { return }
+      self.bandModel?.commit()
+    }
   }
 
   /// Some na captura e no resultado (FR-020), e o gesto desliga junto: mexer
@@ -241,6 +268,8 @@ extension PreviewView: BandGestureHost {
 
   func beginBandGesture() -> Band? {
     guard let bandModel, bandModel.read().band.mode != .off else { return nil }
+    // O gesto corta a mola de uma troca de modo: quem avisa agora é o fim dele.
+    bandTransition &+= 1
     bandRenderer.feedback.prepare()
     return bandRenderer.freezeAtPresentation()
   }

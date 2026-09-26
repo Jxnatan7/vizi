@@ -22,8 +22,9 @@ protocol BandGestureHost: AnyObject {
 /// em que o segundo dedo pousa, e esse é o gesto principal da spec. Com um dono
 /// só, a passagem é contínua.
 ///
-/// Só começa depois que o dedo anda `startSlopPoints`: um toque simples não é
-/// engolido, e os dois toques de voltar ao centro chegam a quem os reconhece.
+/// Só começa depois que o dedo anda `startSlopPoints`, ou quando pousa o
+/// segundo dedo: um toque simples não é engolido, e os dois toques de voltar ao
+/// centro chegam a quem os reconhece.
 final class BandGestureRecognizer: UIGestureRecognizer {
   weak var host: BandGestureHost?
 
@@ -34,7 +35,10 @@ final class BandGestureRecognizer: UIGestureRecognizer {
   /// A referência do arrasto: a faixa e o dedo no instante em que ele começou
   /// a valer.
   private var anchorBand: Band?
+  /// Com um dedo, onde ele está; com dois, o meio deles — no eixo da faixa.
   private var anchorFinger = 0.0
+  /// A distância entre os dois dedos quando a pinça começou a valer.
+  private var anchorSpan: CGFloat = 1
   /// A última faixa desenhada pelo gesto — de onde se recomeça quando um dedo
   /// sai e o outro fica.
   private var lastBand: Band?
@@ -47,11 +51,33 @@ final class BandGestureRecognizer: UIGestureRecognizer {
     if state == .possible, let first = tracked.first {
       touchDown = first.location(in: view)
     }
+    guard tracked.count == 2 else { return }
+    switch state {
+    case .possible:
+      // Dois dedos nunca são um toque: o gesto começa na hora, sem folga.
+      guard let band = host?.beginBandGesture() else {
+        state = .failed
+        return
+      }
+      anchorPinch(band)
+      state = .began
+    case .began, .changed:
+      // De um dedo para dois: a pinça parte da faixa que está na tela.
+      if let band = lastBand { anchorPinch(band) }
+    default:
+      break
+    }
   }
 
   override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
     super.touchesMoved(touches, with: event)
     guard let host, let finger = tracked.first else { return }
+    if tracked.count == 2 {
+      guard state == .began || state == .changed else { return }
+      state = .changed
+      pinch()
+      return
+    }
     let point = finger.location(in: view)
 
     switch state {
@@ -103,11 +129,59 @@ final class BandGestureRecognizer: UIGestureRecognizer {
   private func follow(_ point: CGPoint) {
     guard let host, let base = anchorBand else { return }
     let delta = coordinate(of: point, for: base.mode) - anchorFinger
-    let half = base.thickness / 2
-    let center = min(max(base.center + delta, half), 1 - half)
-    let next = Band(mode: base.mode, center: center, thickness: base.thickness)
+    let next = limited(Band(mode: base.mode, center: base.center + delta,
+                            thickness: base.thickness), policy: host.bandPolicy)
     lastBand = next
     host.moveBand(to: next)
+  }
+
+  // MARK: - Dois dedos
+
+  private func anchorPinch(_ band: Band) {
+    guard case let (a, b)? = fingers else { return }
+    anchorBand = band
+    lastBand = band
+    anchorFinger = coordinate(of: midpoint(a, b), for: band.mode)
+    anchorSpan = max(hypot(b.x - a.x, b.y - a.y), 1)
+  }
+
+  /// Uma pinça em torno do meio dos dedos (FR-009, R22).
+  ///
+  /// A faixa escala com a distância entre eles, e cada ponto dela guarda a
+  /// posição relativa ao meio: um dedo pousado numa borda continua sobre ela,
+  /// e o centro acompanha o meio. No instante em que a referência é tomada a
+  /// escala é 1 e o meio não andou — nada salta.
+  ///
+  /// A distância é a dos dois pontos, não a projetada no eixo: com os dedos
+  /// quase lado a lado, a projetada tenderia a zero e a escala explodiria.
+  private func pinch() {
+    guard let host, let base = anchorBand, case let (a, b)? = fingers else { return }
+    let scale = Double(hypot(b.x - a.x, b.y - a.y) / anchorSpan)
+    let mid = coordinate(of: midpoint(a, b), for: base.mode)
+    let next = limited(Band(mode: base.mode,
+                            center: mid + (base.center - anchorFinger) * scale,
+                            thickness: base.thickness * scale), policy: host.bandPolicy)
+    lastBand = next
+    host.moveBand(to: next)
+  }
+
+  private var fingers: (CGPoint, CGPoint)? {
+    guard tracked.count == 2 else { return nil }
+    return (tracked[0].location(in: view), tracked[1].location(in: view))
+  }
+
+  private func midpoint(_ a: CGPoint, _ b: CGPoint) -> CGPoint {
+    CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
+  }
+
+  // MARK: - Comum
+
+  /// A faixa inteira dentro da imagem, e nunca mais fina que o mínimo (FR-014).
+  private func limited(_ band: Band, policy: BandPolicy) -> Band {
+    let thickness = min(max(band.thickness, policy.minThickness), 1)
+    let half = thickness / 2
+    return Band(mode: band.mode, center: min(max(band.center, half), 1 - half),
+                thickness: thickness)
   }
 
   private func lift(_ lifted: Set<UITouch>, cancelled: Bool) {
@@ -121,7 +195,7 @@ final class BandGestureRecognizer: UIGestureRecognizer {
         state = .failed
       }
     } else if active, let finger = tracked.first, let band = lastBand {
-      // O dedo que ficou vira a referência: nada salta.
+      // De dois dedos para um: o que ficou vira a referência, e nada salta.
       anchor(band, at: finger.location(in: view))
     }
   }

@@ -3,9 +3,11 @@ import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useColorSc
 import { StatusBar } from 'expo-status-bar';
 
 import { PreviewView, type TransformMode } from '../../modules/vizi-vision';
+import { useBand } from '../band/useBand';
 import { useCapture } from '../capture/useCapture';
 import { useSession } from '../camera/useSession';
 import { copySessionToClipboard, evaluateGate } from '../telemetry/exportSession';
+import { BandControl } from './BandControl';
 import { Button, Card, Row } from './parts';
 import { colors } from './theme';
 
@@ -24,6 +26,7 @@ export default function CameraScreen() {
     state, result, error: captureError, capture, dismiss, diagnostics, setDiagnostics,
     save, saving, saved, saveError, reset,
   } = useCapture();
+  const { band, setMode: setBandMode } = useBand();
   const verdicts = useMemo(() => (session ? evaluateGate(session) : []), [session]);
 
   // A sessão parou com o resultado na tela: o nativo já o desfez.
@@ -48,6 +51,9 @@ export default function CameraScreen() {
           <Text style={[styles.caption, { color: c.muted }]}>
             Entrada do modelo · {transform}
           </Text>
+          {/* A faixa sai de cena na captura e no resultado (FR-020); a
+              cápsula some junto, mas guarda o lugar: os cartões não pulam. */}
+          <BandControl c={c} mode={band?.mode} visible={state === 'live'} onChange={setBandMode} />
         </View>
       )}
       <ScrollView contentContainerStyle={styles.content}>

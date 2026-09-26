@@ -268,6 +268,21 @@ public class ViziVisionModule: Module {
       self.coordinator.mode = TransformMode(rawValue: transform) ?? .stretch
     }
 
+    // A cápsula (spec 005). Na thread de interface, onde a faixa se desenha:
+    // o modelo muda na hora, a mola e o retorno tátil saem daqui, e
+    // `onBandChange` só quando a faixa chega (tabela do `setBandMode` no
+    // contrato).
+    AsyncFunction("setBandMode") { (raw: String) in
+      guard let mode = BandMode(rawValue: raw),
+            let change = self.coordinator.band.setMode(mode) else { return }
+      guard let view = PreviewSink.shared.view else {
+        // Sem view, não há mola a esperar.
+        self.coordinator.band.commit()
+        return
+      }
+      view.transitionBand(to: change.to)
+    }.runOnQueue(.main)
+
     // MARK: - Captura (marco 4)
 
     AsyncFunction("capture") { (options: CaptureOptions) -> [String: Any] in
