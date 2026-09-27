@@ -11,14 +11,15 @@ App React Native + Expo de detecção e segmentação em tempo real, on-device.
 | **003 · Caixas e máscaras** | ✅ portão atingido | 26 de 29 |
 | **004 · Captura e resultado** | 🟡 código completo, falta o aparelho | 37 de 38 |
 | **005 · Faixa de interesse** | 🟡 código completo, faltam dois portões no aparelho | 41 de 44 |
+| **006 · Releitura do recorte** | 🟡 código completo, sem build, falta o aparelho | 20 de 26 |
 | Acabamento e adaptação | — | |
 | Android | — | |
 
 A sequência se afastou da tabela de marcos da constituição, e cada desvio foi
 registrado na spec que o fez. As máscaras (antigo marco 5) entraram na 003. Os
 três relógios (antigo marco 4) foram descartados em 16/09: a 60 fps não sobra
-intervalo entre detecções para disfarçar. A 004 e a 005 são marcos de produto,
-e não estavam na tabela.
+intervalo entre detecções para disfarçar. A 004, a 005 e a 006 são marcos de
+produto, e não estavam na tabela.
 
 ### Marco 1 — a inferência cabe, com folga de uma ordem de grandeza
 
@@ -120,6 +121,28 @@ prateleiras no quadro, a captura passa a ser "esta prateleira".
 validados pelo autor em 26/09, sem números registrados. Criar e desligar com
 dois dedos (T034) e virar pelos dedos (T036, SC-004) foram escritos no mesmo
 dia e ainda não tiveram build.
+
+### Releitura do recorte — contar o que está na tela
+
+A 004 contou pela foto inteira, torta; a 006 faz a contagem ser a da imagem que
+a pessoa vê.
+
+- **Por último, o modelo lê o quadrado da tela.** O recorte endireitado,
+  encaixado e centrado, com preto em volta — exatamente como aparece. O que ele
+  encontra é o resultado: contagem, caixas, máscaras, fileiras e divisões.
+- **A foto continua trabalhando**, filtrada pela faixa: acha os livros,
+  endireita e recorta. Só deixa de ser o resultado — salvo quando não há
+  recorte na tela, e aí a imagem exibida é a que ela leu.
+- **Caixa na tela é caixa contada.** No resultado, o overlay desenha a lista
+  como foi contada: sem a faixa e sem o limiar de aparência.
+- **A margem não conta.** Ela mostra fatias dos vizinhos; só conta quem tem a
+  maior parte da caixa dentro do recorte sem ela.
+- **De graça no quadrado.** O preview é quadrado e o recorte já aparece
+  centrado nele, então as caixas da releitura caem no lugar sem conversão, e a
+  releitura corre por baixo da transição.
+
+Revoga o FR-004 da 004 — agora são duas inferências, ainda sem ladrilhamento.
+**Escrita em 27/09, ainda sem build.**
 
 ### O que a medição mudou na arquitetura
 

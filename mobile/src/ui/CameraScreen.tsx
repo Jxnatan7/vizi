@@ -133,11 +133,24 @@ export default function CameraScreen() {
           <Card c={c} border={c.ok} label="RESULTADO">
             <Row c={c} label="livros" value={String(result.count)} strong />
             {/* Vazia é a faixa, não a cena: dizer "nenhum livro" mandaria a
-                pessoa procurar o problema no lugar errado (spec 005, US1). */}
-            {result.count === 0 && result.outsideBandCount > 0 && (
+                pessoa procurar o problema no lugar errado (spec 005, US1).
+                Só vale para a foto: com recorte, a faixa tinha livros. */}
+            {result.count === 0 && result.countSource === 'photo' && result.outsideBandCount > 0 && (
               <Text style={{ color: c.warn, fontSize: 13, lineHeight: 18 }}>
                 Nenhum livro na faixa — {result.outsideBandCount} fora dela.
               </Text>
+            )}
+            {/* A foto achou livros, ou não haveria recorte: quem não achou foi
+                a releitura (spec 006, R34). */}
+            {result.count === 0 && result.countSource === 'reread' && (
+              <Text style={{ color: c.warn, fontSize: 13, lineHeight: 18 }}>
+                A releitura não encontrou livros no recorte.
+              </Text>
+            )}
+            <Row c={c} label="leitura"
+              value={result.countSource === 'reread' ? 'recorte na tela' : 'foto'} />
+            {result.countSource === 'reread' && (
+              <Row c={c} label="releitura" value={`${result.rereadMs.toFixed(0)} ms`} />
             )}
             <Row c={c} label="fora da faixa" value={String(result.outsideBandCount)} />
             <Row c={c} label="foto" value={`${result.photoWidth}×${result.photoHeight}`} />

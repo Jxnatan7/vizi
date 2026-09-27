@@ -1,4 +1,5 @@
 import CoreImage
+import CoreML
 import ExpoModulesCore
 import Foundation
 import UIKit
@@ -34,6 +35,13 @@ struct CaptureOptions: Record {
   /// Divisões mais perto que isto das bordas do recorte são descartadas.
   /// O 0,5 não deixa nenhuma passar: inválido de propósito, como abaixo.
   @Field var dividerEdgeMargin: Double = 0.5
+  /// A releitura do recorte (spec 006). Desligada, o resultado é a leitura da
+  /// foto, como na 005 — e é o que o default faz se o campo não chegar.
+  @Field var reread: Bool = false
+  /// Fração da área da caixa dentro do recorte sem a margem para contar. O 2
+  /// não deixa nenhuma passar: inválido de propósito, como o de cima — a
+  /// contagem zerada aparece na primeira foto.
+  @Field var rereadMembership: Double = 2
 }
 
 /// Política da estimativa da estante. Vira `ShelfGeometry.Tuning`.
@@ -140,6 +148,12 @@ public class ViziVisionModule: Module {
   /// próxima captura.
   private let keptLock = NSLock()
   private var kept: (id: String, buffer: CVPixelBuffer)?
+  /// Muda cada vez que o resultado deixa de valer: nova captura, volta, fim de
+  /// sessão. O que uma captura agenda para a thread de interface só vale
+  /// enquanto ela for a atual. O `imageId` não bastava: uma foto que chega
+  /// depois do fim da sessão guardaria o resultado de novo e passaria pela
+  /// guarda (spec 006, FR-011).
+  private var resultEpoch = 0
 
   public func definition() -> ModuleDefinition {
     Name("ViziVision")
@@ -295,7 +309,7 @@ public class ViziVisionModule: Module {
       // A chave do resultado para o `saveResult`. A captura nova descarta a
       // anterior mesmo que falhe: salvar depois disso gravaria a foto errada.
       let imageId = UUID().uuidString
-      self.dropResult()
+      let captureEpoch = self.dropResult()
 
       // A faixa do instante do toque vale para a captura inteira: mexer nela
       // durante a foto não muda o que já foi decidido (spec 005). A faixa sai
@@ -377,6 +391,10 @@ public class ViziVisionModule: Module {
         /// Onde o recorte exibido estava no frame, normalizado. Vazio quando o
         /// que aparece é o frame inteiro — e a transição só se acomoda nele.
         var transitionQuad: [CGPoint] = []
+        /// O recorte, endireitado ou só girado, como vai para a tela. É o que a
+        /// releitura lê (spec 006). Guardado também no diagnóstico, que mostra
+        /// outra coisa: a contagem não pode mudar com o modo (FR-010).
+        var cutout: (buffer: CVPixelBuffer, books: CGRect)?
 
         if let protos = result.protos {
           // A atitude é amostrada NO disparo, não depois: medir a inclinação
@@ -486,6 +504,7 @@ public class ViziVisionModule: Module {
                  margin: options.cropMargin),
                let rendered = Rectify.render(out.image, context: self.ciContext) {
               straightened = out.fullyRectified
+              cutout = (rendered, out.books)
               // O motivo da estimativa vem antes do da retificação. "Poucos
               // livros" diz à pessoa o que fazer diferente; "sem ponto de
               // fuga" é só a consequência dele, e era o que aparecia.
@@ -574,10 +593,11 @@ public class ViziVisionModule: Module {
         // para endireitar; a canônica quando não deu.
         PreviewSink.shared.showStill(displayBuffer)
         // É esta imagem que o `saveResult` grava: a que a pessoa está vendo.
-        self.keepResult(imageId, displayBuffer)
+        self.keepResult(imageId, displayBuffer, epoch: captureEpoch)
 
         // O overlay ao vivo não vale sobre a imagem endireitada — as
-        // coordenadas são de outro espaço. Limpa em vez de desenhar errado.
+        // coordenadas são de outro espaço. Limpa em vez de desenhar errado; as
+        // caixas do recorte vêm da releitura, adiante.
         if imageReplaced {
           self.coordinator.results.publishOverriding(instances: [], protos: nil)
         } else {
@@ -598,32 +618,82 @@ public class ViziVisionModule: Module {
         } else {
           destination = .whole(size: shown)
         }
-        // As divisões estão normalizadas no recorte ENDIREITADO. Sobre a
-        // canônica ou o diagnóstico cairiam em outro espaço — lá, nenhuma.
-        let drawn = straightened && !options.diagnostics ? shelves : []
         PreviewSink.shared.onView {
-          // Por baixo da transição: aparecem quando ela termina (FR-008).
-          $0.showDividers(drawn, imageSize: shown)
           $0.result.settle(destination, durationMs: options.transitionMs)
+        }
+        // O resultado está na tela e a transição começou: é aqui que o SC-001
+        // da 004 para de contar. A releitura corre por baixo dela (R29).
+        let readyMs = (CFAbsoluteTimeGetCurrent() - touchedAt) * 1000
+
+        // ── A releitura (spec 006) ────────────────────────────────────────
+        //
+        // Por último, o modelo lê o recorte como a tela o mostra, e só o que
+        // ele encontra é o resultado (FR-002). Sem recorte na tela, com a
+        // releitura desligada ou se ela falhar, vale a leitura da foto — que,
+        // sem recorte, já é a da imagem exibida (FR-008, FR-012).
+        var reading = Reread.Outcome(
+          instances: instances, protos: result.protos, shelves: shelves,
+          rowCount: shelfCount, lyingCount: lyingCount)
+        var countSource = "photo"
+        var rereadMs = 0.0
+        // As divisões da foto estão normalizadas no recorte ENDIREITADO. Sobre
+        // a canônica ou o diagnóstico cairiam em outro espaço — lá, nenhuma.
+        var drawn = straightened && !options.diagnostics ? shelves : []
+        /// O que a releitura põe no overlay. Nada quando ela não valeu: a
+        /// leitura da foto já foi publicada acima.
+        var republish: (instances: [Instance], protos: MLMultiArray?)?
+
+        if options.reread, let cutout {
+          let started = CFAbsoluteTimeGetCurrent()
+          if let outcome = try? self.reread(cutout.buffer, books: cutout.books, options: options) {
+            rereadMs = (CFAbsoluteTimeGetCurrent() - started) * 1000
+            reading = outcome
+            countSource = "reread"
+            // As da releitura estão no recorte que está na tela, endireitado
+            // ou só girado (FR-007). No diagnóstico, nada dela aparece (FR-010).
+            if options.diagnostics {
+              drawn = []
+              republish = (instances: [], protos: nil)
+            } else {
+              drawn = outcome.shelves
+              republish = (instances: outcome.instances, protos: outcome.protos)
+            }
+          }
+        }
+
+        // Um bloco só, e só enquanto esta captura for a atual: a volta e o fim
+        // da sessão invalidam o que ela agendou (FR-011, R29).
+        let dividers = drawn
+        let boxes = republish
+        DispatchQueue.main.async { [weak self] in
+          guard let self, self.isCurrent(captureEpoch) else { return }
+          if let boxes {
+            self.coordinator.results.publishOverriding(instances: boxes.instances,
+                                                       protos: boxes.protos)
+          }
+          // Por baixo da transição: aparecem quando ela termina (FR-008 da 004).
+          PreviewSink.shared.view?.showDividers(dividers, imageSize: shown)
         }
 
         return [
-          "count": instances.count,
+          "count": reading.instances.count,
+          "countSource": countSource,
+          "rereadMs": rereadMs,
           "straightened": straightened,
           "declineReason": declineReason,
           "geometryConfidence": confidence,
           "azimuthConfidence": azimuth,
-          "shelves": shelves.map(\.dictionary),
-          "shelfCount": shelfCount,
-          "lyingCount": lyingCount,
+          "shelves": reading.shelves.map(\.dictionary),
+          "shelfCount": reading.rowCount,
+          "lyingCount": reading.lyingCount,
           "usedGravity": usedGravity,
           "azimuthScores": azimuthScores,
           "imageId": imageId,
           "elapsedMs": shot.elapsedMs,
-          "readyMs": (CFAbsoluteTimeGetCurrent() - touchedAt) * 1000,
+          "readyMs": readyMs,
           "photoWidth": CVPixelBufferGetWidth(shot.buffer),
           "photoHeight": CVPixelBufferGetHeight(shot.buffer),
-          "instances": instances.count,
+          "instances": reading.instances.count,
           "outsideBandCount": outsideBandCount,
         ]
       } catch {
@@ -652,6 +722,9 @@ public class ViziVisionModule: Module {
         // delas, e depois dela vem a câmera ao vivo.
         PreviewSink.shared.view?.clearDividers()
         PreviewSink.shared.view?.result.dismiss(durationMs: duration)
+        // Esvaziar antes de soltar a pausa: as caixas do resultado ficariam
+        // sobre o ao vivo até o primeiro frame novo (spec 006, FR-011).
+        self.coordinator.results.clear()
         self.coordinator.results.setPaused(false)
         PreviewSink.shared.frozen = false
       }
@@ -719,6 +792,62 @@ public class ViziVisionModule: Module {
     }
   }
 
+  // MARK: - Releitura (spec 006)
+
+  /// O recorte, encaixado no quadrado como a tela o mostra, lido pelo modelo.
+  ///
+  /// O que sai daqui é o resultado (FR-002): as caixas e as máscaras que
+  /// passaram pela regra das bordas, e as fileiras e divisões delas no espaço
+  /// do recorte.
+  ///
+  /// - Parameter books: onde os livros ficam no recorte, de 0 a 1 — o recorte
+  ///   sem a margem, medido pelo `PlaneRectifier`.
+  private func reread(
+    _ cutout: CVPixelBuffer, books: CGRect, options: CaptureOptions
+  ) throws -> Reread.Outcome {
+    let side = engine.inputWidth
+    let square = try coordinator.squareFromCutout(cutout, side: side)
+    // Os mesmos limiares do ao vivo e da foto (FR-003).
+    let run = try engine.run(
+      on: square.buffer,
+      confidenceThreshold: coordinator.confidenceThreshold,
+      iouThreshold: coordinator.iouThreshold)
+
+    let inside = Reread.inside(
+      run.instances,
+      core: Reread.core(of: square.content, books: books),
+      membership: options.rereadMembership)
+
+    // Fileiras e deitados pela mesma `ShelfGeometry` da foto, sem gravidade:
+    // numa imagem reta, o eixo médio das lombadas é a vertical (R33). Sem
+    // gravidade, a focal não entra na conta.
+    var rows: [ShelfGeometry.Row] = []
+    var lyingCount = 0
+    if let protos = run.protos {
+      let estimate = ShelfGeometry.estimate(
+        instances: inside,
+        protos: protos,
+        imageSide: side,
+        gravity: nil,
+        focal: Projective.Focal(x: Double(side), y: Double(side)),
+        // Fileira não precisa de quadrilátero: um livro já é uma. O mínimo da
+        // geometria deixaria uma prateleira de três livros sem divisões.
+        minInstances: 1,
+        minConfidence: options.minGeometryConfidence,
+        tuning: ShelfGeometry.Tuning(options.geometry))
+      rows = estimate.rows
+      lyingCount = estimate.lying.count
+    }
+
+    return Reread.Outcome(
+      instances: inside,
+      protos: run.protos,
+      shelves: Reread.shelves(rows, of: inside, content: square.content,
+                              edge: options.dividerEdgeMargin),
+      rowCount: rows.count,
+      lyingCount: lyingCount)
+  }
+
   // MARK: - Transição
 
   /// A região dos objetos ao vivo, normalizada, com a mesma margem do recorte.
@@ -754,10 +883,18 @@ public class ViziVisionModule: Module {
 
   // MARK: - Resultado guardado
 
-  private func keepResult(_ id: String, _ buffer: CVPixelBuffer) {
+  /// Uma captura que já não é a atual não guarda nada: a sessão acabou, ou a
+  /// pessoa voltou, enquanto ela terminava.
+  private func keepResult(_ id: String, _ buffer: CVPixelBuffer, epoch: Int) {
     keptLock.lock()
-    kept = (id: id, buffer: buffer)
+    if resultEpoch == epoch { kept = (id: id, buffer: buffer) }
     keptLock.unlock()
+  }
+
+  private func isCurrent(_ epoch: Int) -> Bool {
+    keptLock.lock()
+    defer { keptLock.unlock() }
+    return resultEpoch == epoch
   }
 
   private func keptResult() -> (id: String, buffer: CVPixelBuffer)? {
@@ -766,10 +903,15 @@ public class ViziVisionModule: Module {
     return kept
   }
 
-  private func dropResult() {
+  /// Descarta o resultado guardado e invalida o que a captura dele ainda
+  /// tiver agendado. Devolve a época nova.
+  @discardableResult
+  private func dropResult() -> Int {
     keptLock.lock()
+    defer { keptLock.unlock() }
     kept = nil
-    keptLock.unlock()
+    resultEpoch &+= 1
+    return resultEpoch
   }
 
   /// Desfaz o estado de resultado sem animar: congelamento, pausa, o
@@ -779,9 +921,13 @@ public class ViziVisionModule: Module {
   /// congelamento e pausa presos, e a câmera da sessão seguinte nunca
   /// apareceria. (Achado na leitura, não no aparelho.)
   private func endResultState() {
-    PreviewSink.shared.frozen = false
-    coordinator.results.setPaused(false)
+    // Primeiro invalidar: o que a captura agendou deixa de valer antes de a
+    // limpeza acontecer (spec 006, FR-011).
     dropResult()
+    PreviewSink.shared.frozen = false
+    // A sessão seguinte não herda as caixas do resultado.
+    coordinator.results.clear()
+    coordinator.results.setPaused(false)
     PreviewSink.shared.onView {
       $0.result.teardown()
       $0.clearDividers()

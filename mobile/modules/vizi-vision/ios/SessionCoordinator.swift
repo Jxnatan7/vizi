@@ -1,5 +1,6 @@
 import AVFoundation
 import UIKit
+import CoreImage
 import CoreMedia
 import CoreVideo
 import Foundation
@@ -150,6 +151,20 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
   /// compara exatamente isso.
   func squareFromPhoto(_ buffer: CVPixelBuffer, side: Int) throws -> CVPixelBuffer {
     guard let square = transform.transform(buffer, mode: mode, side: side) else {
+      throw InferenceEngine.EngineError.imageDecode
+    }
+    return square
+  }
+
+  /// O recorte que está na tela, do jeito que a tela o mostra — a entrada da
+  /// releitura (spec 006).
+  ///
+  /// Não passa pela transformação da sessão: ela é o que leva o sensor ao
+  /// quadrado canônico, e o recorte já foi endireitado a partir da foto.
+  func squareFromCutout(_ buffer: CVPixelBuffer, side: Int) throws
+    -> (buffer: CVPixelBuffer, content: CGRect)
+  {
+    guard let square = transform.fit(CIImage(cvPixelBuffer: buffer), side: side) else {
       throw InferenceEngine.EngineError.imageDecode
     }
     return square

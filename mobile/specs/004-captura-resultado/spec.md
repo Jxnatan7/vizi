@@ -119,8 +119,11 @@ brinquedo de demonstração. Último porque o resultado já é útil sem isso.
   formato acontece apenas durante a captura e é revertida.
 - **FR-003**: O sistema MUST exibir indicação de carregamento entre o toque e o
   resultado.
-- **FR-004**: O sistema MUST executar **uma** inferência sobre a foto, sem
-  ladrilhamento.
+- ~~**FR-004**: O sistema MUST executar **uma** inferência sobre a foto, sem
+  ladrilhamento.~~ **Revogado pela [006](../006-releitura-recorte/spec.md) em
+  27/09/2026.** A captura passa a ter duas leituras: a da foto acha os livros,
+  endireita e recorta; a do recorte na tela é o resultado. Ladrilhamento
+  continua fora.
 - **FR-005**: O sistema MUST estimar a correção de perspectiva a partir das
   **máscaras** dos objetos detectados, não das caixas.
 - **FR-006**: O sistema MUST declarar um critério de confiança para a correção,
@@ -162,7 +165,9 @@ brinquedo de demonstração. Último porque o resultado já é útil sem isso.
 - **SC-003**: Numa estante fotografada a até 30° de ângulo, as lombadas do
   resultado aparecem verticais com desvio inferior a 3°.
 - **SC-004**: A contagem da foto fica dentro de ±10% da contagem mediana
-  observada ao vivo na mesma cena.
+  observada ao vivo na mesma cena. *Redefinido pela
+  [006](../006-releitura-recorte/spec.md):* a contagem da captura passa a ser a
+  da releitura do recorte.
 - **SC-005**: Ao voltar, a câmera ao vivo retoma em menos de 500 ms e volta a
   60 fps.
 - **SC-006**: O endireitamento é recusado em vez de aplicado errado: nenhuma

@@ -45,8 +45,10 @@ O que existe hoje, spec a spec:
 - **Apontar, apertar, contar.** Uma foto de 12 MP conta os livros, endireita a
   estante e guarda o resultado num histórico.
 - **Faixa de interesse.** A pessoa escolhe com os dedos a prateleira que conta.
+- **Releitura do recorte.** A contagem é a da imagem na tela: o recorte
+  endireitado, lido por último pelo modelo, com as caixas sobre ele.
 
-As duas últimas têm o código completo e ainda fecham portões no aparelho. O
+As três últimas têm o código completo e ainda fecham portões no aparelho. O
 estado de cada spec, com as medições, está em [mobile/README.md](mobile/README.md).
 
 Tudo sai do Linux, sem Mac: o GitHub Actions compila, e a assinatura e a

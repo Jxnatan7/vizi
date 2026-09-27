@@ -70,4 +70,19 @@ export const DEFAULT_CAPTURE: CaptureOptions = {
 
   /** Uma divisão colada na borda do recorte é a borda, não uma divisão. */
   dividerEdgeMargin: 0.01,
+
+  /**
+   * A releitura do recorte (spec 006). Por último, o modelo lê o quadrado que
+   * está na tela, e só o que ele encontra é o resultado. Desligada, volta a
+   * valer a leitura da foto, como na 005.
+   */
+  reread: true,
+
+  /**
+   * A maior parte da caixa dentro do recorte sem a margem, como a regra da
+   * faixa. A margem mostra fatias dos vizinhos — na faixa vertical, quase
+   * sempre — e é isto que as impede de contar. Decisão adiada: ajustar pelo
+   * SC-003 da 006.
+   */
+  rereadMembership: 0.5,
 };

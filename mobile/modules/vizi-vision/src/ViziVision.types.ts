@@ -216,7 +216,21 @@ export type CaptureOptions = {
   geometry: GeometryTuning;
   /** Divisões mais perto que isto das bordas do recorte são descartadas. */
   dividerEdgeMargin: number;
+  /**
+   * A releitura do recorte (spec 006): o modelo lê por último o quadrado que
+   * está na tela, e o que ele encontra é o resultado. Desligada, o resultado é
+   * a leitura da foto, como na 005.
+   */
+  reread: boolean;
+  /**
+   * Fração da área da caixa que precisa estar dentro do recorte sem a margem
+   * para contar (FR-004). A margem mostra pedaços do que está em volta.
+   */
+  rereadMembership: number;
 };
+
+/** De qual leitura veio a contagem (spec 006, FR-009). */
+export type CountSource = 'reread' | 'photo';
 
 /**
  * Política da estimativa da estante. Estava fixa no Swift até a T037 deste
@@ -253,7 +267,19 @@ export type ConfidenceWeights = {
 };
 
 export type CaptureResult = {
+  /**
+   * Com `countSource: 'reread'`, as caixas da releitura que passaram pela
+   * regra das bordas — as mesmas que aparecem na tela.
+   */
   count: number;
+  /**
+   * `'reread'` quando a releitura produziu o resultado; `'photo'` quando não
+   * havia recorte na tela, a releitura estava desligada ou falhou. Contagem,
+   * fileiras e deitados vêm dela; a geometria vem sempre da foto.
+   */
+  countSource: CountSource;
+  /** Montar o quadrado, inferir, filtrar e agrupar. Zero sem releitura. */
+  rereadMs: number;
   straightened: boolean;
   /** Texto legível quando a correção foi recusada — FR-011. */
   declineReason: string;
@@ -294,9 +320,9 @@ export type CaptureResult = {
   /** Só a foto: troca de formato, captura e restauração. */
   elapsedMs: number;
   /**
-   * Do toque ao resultado pronto. O endireitamento começa aqui, então o
-   * resultado final aparece em `readyMs + transitionMs` — é isso que o SC-001
-   * limita a 1,5 s.
+   * Do toque ao resultado na tela, antes da releitura. O endireitamento começa
+   * aqui, então o resultado final aparece em `readyMs + transitionMs` — é isso
+   * que o SC-001 limita a 1,5 s. A releitura corre por baixo da transição.
    */
   readyMs: number;
   photoWidth: number;
@@ -365,6 +391,8 @@ export type HistoryEntry = {
   /** Relativo à pasta de documentos. */
   file: string;
   count: number;
+  /** Ausente nas entradas de antes da 006, que eram da foto. */
+  countSource?: CountSource;
   straightened: boolean;
   /** Milissegundos desde a época. */
   capturedAt: number;

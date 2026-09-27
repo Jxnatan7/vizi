@@ -30,6 +30,11 @@ enum PlaneRectifier {
     var cropRight = 0.0
     var cropTop = 0.0
     var cropBottom = 0.0
+    /// Onde os livros ficam no resultado — o recorte sem a margem —, de 0 a 1,
+    /// com a origem no topo. **Medido**, não deduzido da margem: no recuo de só
+    /// rotação a borda da foto pode cortar o recorte, e aquele lado fica com
+    /// menos margem (spec 006, R32).
+    var books = CGRect(x: 0, y: 0, width: 1, height: 1)
 
     /// Ponto da foto → coordenada de 0 a 1 no resultado.
     func normalize(_ p: CGPoint) -> CGPoint? {
@@ -116,6 +121,9 @@ enum PlaneRectifier {
       return rotationOnly(image: image, gravity: g, region: region, margin: margin, reason: "proporção acima de 40:1")
     }
 
+    // A extensão dos livros, antes da margem: é o que a releitura conta.
+    let booksX = (minX, maxX), booksY = (minY, maxY)
+
     // A margem entra AQUI, no espaço retificado — é o que garante que a base
     // dos livros apareça inteira, em vez de depender da geometria estimada.
     let mx = (maxX - minX) * margin, my = (maxY - minY) * margin
@@ -153,6 +161,13 @@ enum PlaneRectifier {
 
     let corners = [CGPoint(x: leftX, y: topY), CGPoint(x: rightX, y: topY),
                    CGPoint(x: rightX, y: bottomY), CGPoint(x: leftX, y: bottomY)]
+
+    // Os livros no resultado, normalizados como o `normalize` faz. Os eixos
+    // podem estar invertidos; os extremos, não.
+    let u = [(booksX.0 - leftX) / (rightX - leftX), (booksX.1 - leftX) / (rightX - leftX)]
+    let v = [(booksY.0 - topY) / (bottomY - topY), (booksY.1 - topY) / (bottomY - topY)]
+    let books = CGRect(x: min(u[0], u[1]), y: min(v[0], v[1]),
+                       width: abs(u[1] - u[0]), height: abs(v[1] - v[0]))
     let source = corners.compactMap { apply(m, $0) }
     guard source.count == 4 else {
       return rotationOnly(image: image, gravity: g, region: region, margin: margin)
@@ -189,7 +204,8 @@ enum PlaneRectifier {
     return Output(image: out, fullyRectified: true, transform: hMat,
                   sourceQuad: source, verticalVP: verticalVP, fallbackReason: nil,
                   cropLeft: Double(leftX), cropRight: Double(rightX),
-                  cropTop: Double(topY), cropBottom: Double(bottomY))
+                  cropTop: Double(topY), cropBottom: Double(bottomY),
+                  books: books)
   }
 
   /// Recuo: só deixa a imagem em pé, usando a gravidade.
@@ -212,6 +228,8 @@ enum PlaneRectifier {
     let mapped = region.map { flip($0).applying(rot) }
     var minX = mapped.map(\.x).min()!, maxX = mapped.map(\.x).max()!
     var minY = mapped.map(\.y).min()!, maxY = mapped.map(\.y).max()!
+    // A extensão dos livros, antes da margem: é o que a releitura conta.
+    let booksRect = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     let mx = (maxX - minX) * CGFloat(margin), my = (maxY - minY) * CGFloat(margin)
     minX -= mx; maxX += mx; minY -= my; maxY += my
 
@@ -227,10 +245,19 @@ enum PlaneRectifier {
                   CGPoint(x: e.maxX, y: e.minY), CGPoint(x: e.minX, y: e.minY)]
       .map { flip($0.applying(inverse)) }
 
+    // Os livros no resultado, contra a extensão REAL do recorte — a que a
+    // borda da foto pode ter cortado. O topo é o `maxY` do Core Image.
+    let books = CGRect(x: (booksRect.minX - e.minX) / e.width,
+                       y: (e.maxY - booksRect.maxY) / e.height,
+                       width: booksRect.width / e.width,
+                       height: booksRect.height / e.height)
+      .intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+
     return Output(image: crop, fullyRectified: false,
                   transform: [Double(rot.a), Double(rot.c), Double(rot.tx),
                               Double(rot.b), Double(rot.d), Double(rot.ty), 0, 0, 1],
-                  sourceQuad: source, verticalVP: nil, fallbackReason: reason)
+                  sourceQuad: source, verticalVP: nil, fallbackReason: reason,
+                  books: books.isNull ? CGRect(x: 0, y: 0, width: 1, height: 1) : books)
   }
 
   // MARK: - Matriz 3×3

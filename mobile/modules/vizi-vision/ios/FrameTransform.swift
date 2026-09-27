@@ -119,4 +119,49 @@ final class FrameTransform {
     context.render(image, to: destination)
     return destination
   }
+
+  /// O recorte como a tela o mostra: encaixado no quadrado, centrado, com
+  /// preto no resto. É a entrada da releitura (spec 006, R30).
+  ///
+  /// **Sem a normalização de orientação** do `transform`. Ela gira toda imagem
+  /// mais larga que alta porque supõe o sensor deitado — e um recorte
+  /// horizontal, o caso comum, entraria com os livros deitados. O recorte já
+  /// chega em pé.
+  ///
+  /// O encaixe é o do `resizeAspect` da camada de vídeo, e o preto é o fundo
+  /// da `PreviewView`: não são ajuste, são o que a tela mostra.
+  ///
+  /// - Returns: o buffer e o retângulo que o recorte ocupa nele, em pixels do
+  ///   quadrado com origem no topo — o espaço das detecções.
+  func fit(_ source: CIImage, side: Int) -> (buffer: CVPixelBuffer, content: CGRect)? {
+    guard let pool = ensurePool(side: side) else { return nil }
+
+    var destination: CVPixelBuffer?
+    guard CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &destination)
+            == kCVReturnSuccess,
+          let destination else { return nil }
+
+    let image = source.transformed(by: CGAffineTransform(
+      translationX: -source.extent.minX, y: -source.extent.minY))
+    let w = image.extent.width, h = image.extent.height
+    guard w > 0, h > 0 else { return nil }
+
+    let target = CGFloat(side)
+    let scale = min(target / w, target / h)
+    // Centrado nos dois eixos: a mesma conta vale com a origem embaixo, do
+    // Core Image, e em cima, das detecções.
+    let content = CGRect(x: (target - w * scale) / 2, y: (target - h * scale) / 2,
+                         width: w * scale, height: h * scale)
+
+    // O recorte chega em resolução cheia, e a redução passa de 4×: sem
+    // filtragem ela serrilharia as lombadas finas, que a tela mostra lisas.
+    let placed = image
+      .transformed(by: CGAffineTransform(scaleX: scale, y: scale), highQualityDownsample: true)
+      .transformed(by: CGAffineTransform(translationX: content.minX, y: content.minY))
+    let background = CIImage(color: .black)
+      .cropped(to: CGRect(x: 0, y: 0, width: target, height: target))
+
+    context.render(placed.composited(over: background), to: destination)
+    return (destination, content)
+  }
 }

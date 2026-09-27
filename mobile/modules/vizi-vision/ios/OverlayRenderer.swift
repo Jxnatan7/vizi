@@ -54,11 +54,17 @@ final class ResultStore {
   /// embaixo.
   private var paused = false
 
+  /// `true` quando quem publicou foi a captura. Essa lista já é o que conta —
+  /// filtrada pela faixa na foto, ou lida no espaço do recorte —, e o overlay a
+  /// desenha como está (spec 006, R31).
+  private var fromCapture = false
+
   func publish(instances: [Instance], protos: MLMultiArray?) {
     lock.lock()
     if !paused {
       self.instances = instances
       self.protos = protos
+      fromCapture = false
       generation &+= 1
     }
     lock.unlock()
@@ -73,6 +79,7 @@ final class ResultStore {
     lock.lock()
     self.instances = instances
     self.protos = protos
+    fromCapture = true
     generation &+= 1
     lock.unlock()
   }
@@ -85,15 +92,17 @@ final class ResultStore {
 
   /// Nunca devolve vazio por falta de resultado novo — FR-009: sumir é pior
   /// que atrasar.
-  func read() -> (instances: [Instance], protos: MLMultiArray?, generation: UInt64) {
+  func read() -> (instances: [Instance], protos: MLMultiArray?, generation: UInt64,
+                   fromCapture: Bool) {
     lock.lock(); defer { lock.unlock() }
-    return (instances, protos, generation)
+    return (instances, protos, generation, fromCapture)
   }
 
   func clear() {
     lock.lock()
     instances = []
     protos = nil
+    fromCapture = false
     generation &+= 1
     lock.unlock()
   }
@@ -104,7 +113,10 @@ final class OverlayRenderer {
   let boxLayer = CALayer()
   let maskLayer = CALayer()
 
-  var style = OverlayStyle()
+  /// Trocar o estilo força o próximo desenho. Ao vivo o frame seguinte já
+  /// redesenhava; no resultado não chegam frames, e ligar e desligar caixas e
+  /// máscaras não teria efeito (spec 006, FR-006).
+  var style = OverlayStyle() { didSet { lastGeneration = .max } }
   var imageSide: CGFloat = 640
   weak var store: ResultStore?
 
@@ -196,11 +208,22 @@ final class OverlayRenderer {
     lastBandGeneration = bandGeneration
 
     let started = CFAbsoluteTimeGetCurrent()
-    let members = current.map {
-      $0.band.members(of: snapshot.instances, imageSide: Float(imageSide),
-                      membership: $0.policy.membership)
-    } ?? snapshot.instances
-    let visible = members.filter { $0.score >= style.minConfidence }
+    let members: [Instance]
+    let visible: [Instance]
+    if snapshot.fromCapture {
+      // O resultado da captura, desenhado exatamente como foi contado (spec
+      // 006, FR-005). A faixa já agiu na foto — e vive nas coordenadas do
+      // frame ao vivo, não nas do recorte —, e o limiar de aparência
+      // esconderia caixas que contam.
+      members = snapshot.instances
+      visible = snapshot.instances
+    } else {
+      members = current.map {
+        $0.band.members(of: snapshot.instances, imageSide: Float(imageSide),
+                        membership: $0.policy.membership)
+      } ?? snapshot.instances
+      visible = members.filter { $0.score >= style.minConfidence }
+    }
 
     // Sem animação implícita: a 60 Hz, interpolar entre estados produziria
     // arrasto em vez de acompanhamento.

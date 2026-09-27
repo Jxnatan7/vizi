@@ -50,6 +50,9 @@ export function saveResult(result: CaptureResult, capturedAt: number): Promise<H
       id: saved.id,
       file: saved.file,
       count: result.count,
+      // De qual leitura veio a contagem (spec 006, FR-009). Sem isto, o índice
+      // misturaria contagens da foto e da releitura sem dizer qual é qual.
+      countSource: result.countSource,
       straightened: result.straightened,
       capturedAt,
       width: saved.width,

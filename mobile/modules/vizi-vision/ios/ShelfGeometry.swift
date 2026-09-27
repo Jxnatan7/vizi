@@ -25,6 +25,8 @@ enum ShelfGeometry {
   /// então todas são retificadas pela MESMA homografia — e duas ou mais retas
   /// de base dão o ponto de fuga horizontal por medição, em vez de suposição.
   struct Row {
+    /// Índices na lista de instâncias recebida — não na de lombadas, que pode
+    /// ser menor.
     var indices: [Int]
     var slope: Double
     var intercept: Double
@@ -40,6 +42,7 @@ enum ShelfGeometry {
     var confidence: Double
     var rows: [Row] = []
     /// Objetos que não estão em pé. Contados e marcados, fora da geometria.
+    /// Índices de instância, como os das fileiras.
     var lying: [Int] = []
     /// `true` quando a vertical veio da gravidade, não das lombadas.
     var usedGravity = false
@@ -121,7 +124,17 @@ enum ShelfGeometry {
                       declineReason: "Poucos livros para estimar a perspectiva (\(instances.count))")
     }
 
-    let spines = instances.compactMap { spine(for: $0, protos: protos, imageSide: imageSide) }
+    // Uma máscara pequena demais não vira lombada, e a lista encolhe. Quem lê
+    // as fileiras indexa as INSTÂNCIAS: sem guardar a dona de cada lombada, uma
+    // lombada perdida trocava os livros de uma fileira pelos vizinhos (spec
+    // 006, R33).
+    var spines: [Spine] = []
+    var owner: [Int] = []
+    for (i, inst) in instances.enumerated() {
+      guard let s = spine(for: inst, protos: protos, imageSide: imageSide) else { continue }
+      spines.append(s)
+      owner.append(i)
+    }
     guard spines.count >= minInstances else {
       return Estimate(quad: nil, confidence: 0, rows: [], lying: [], usedGravity: gravity != nil,
                       declineReason: "Não foi possível medir a inclinação das lombadas")
@@ -176,8 +189,11 @@ enum ShelfGeometry {
       }
     }
 
+    // O que sai daqui é índice de instância, não de lombada.
+    let lyingOwners = lyingIdx.map { owner[$0] }
+
     guard standingIdx.count >= minInstances else {
-      return Estimate(quad: nil, confidence: 0, rows: [], lying: lyingIdx,
+      return Estimate(quad: nil, confidence: 0, rows: [], lying: lyingOwners,
                       usedGravity: usedGravity,
                       declineReason: "Poucos objetos em pé para estimar a estante")
     }
@@ -212,10 +228,12 @@ enum ShelfGeometry {
     for g in groups {
       let level = g.map { levelOf(spines[$0].base) }.reduce(0, +) / Double(g.count)
       if g.count >= minPerRow, let (a, b, r) = fitLine(g.map { spines[$0].base }) {
-        rows.append(Row(indices: g, slope: a, intercept: b, level: level, usedForGeometry: true))
+        rows.append(Row(indices: g.map { owner[$0] }, slope: a, intercept: b, level: level,
+                        usedForGeometry: true))
         residuals.append(r)
       } else {
-        rows.append(Row(indices: g, slope: 0, intercept: 0, level: level, usedForGeometry: false))
+        rows.append(Row(indices: g.map { owner[$0] }, slope: 0, intercept: 0, level: level,
+                        usedForGeometry: false))
       }
     }
 
@@ -223,13 +241,13 @@ enum ShelfGeometry {
     for i in lyingIdx {
       let l = levelOf(spines[i].base)
       if let nearest = rows.indices.min(by: { abs(rows[$0].level - l) < abs(rows[$1].level - l) }) {
-        rows[nearest].indices.append(i)
+        rows[nearest].indices.append(owner[i])
       }
     }
 
     let usable = rows.filter { $0.usedForGeometry }
     guard let lowest = usable.min(by: { $0.level < $1.level }) else {
-      return Estimate(quad: nil, confidence: 0, rows: rows, lying: lyingIdx,
+      return Estimate(quad: nil, confidence: 0, rows: rows, lying: lyingOwners,
                       usedGravity: usedGravity,
                       declineReason: "Nenhuma fileira com livros suficientes para estimar a perspectiva")
     }
@@ -251,7 +269,7 @@ enum ShelfGeometry {
     // ── O quadrilátero ────────────────────────────────────────────────────
     let sorted = standingIdx.sorted { spines[$0].center.x < spines[$1].center.x }
     guard let leftIdx = sorted.first, let rightIdx = sorted.last else {
-      return Estimate(quad: nil, confidence: 0, rows: rows, lying: lyingIdx,
+      return Estimate(quad: nil, confidence: 0, rows: rows, lying: lyingOwners,
                       usedGravity: usedGravity, declineReason: "Sem extremos")
     }
     let left = spines[leftIdx], right = spines[rightIdx]
@@ -274,7 +292,7 @@ enum ShelfGeometry {
           let tl = Projective.toPoint(Projective.cross(topEdge, leftEdge)),
           let tr = Projective.toPoint(Projective.cross(topEdge, rightEdge))
     else {
-      return Estimate(quad: nil, confidence: 0, rows: rows, lying: lyingIdx,
+      return Estimate(quad: nil, confidence: 0, rows: rows, lying: lyingOwners,
                       usedGravity: usedGravity, declineReason: "As bordas da estante não se cruzam")
     }
     let quad = Quad(topLeft: tl, topRight: tr, bottomLeft: bl, bottomRight: br)
@@ -295,12 +313,12 @@ enum ShelfGeometry {
     let confidence = countScore * w.count + lineScore * w.line + spreadScore * w.spread + rowScore * w.rows
 
     guard confidence >= minConfidence else {
-      return Estimate(quad: nil, confidence: confidence, rows: rows, lying: lyingIdx,
+      return Estimate(quad: nil, confidence: confidence, rows: rows, lying: lyingOwners,
                       usedGravity: usedGravity,
                       declineReason: "Geometria pouco confiável — tente de frente para a estante")
     }
     guard isSane(quad, imageSide: imageSide) else {
-      return Estimate(quad: nil, confidence: confidence, rows: rows, lying: lyingIdx,
+      return Estimate(quad: nil, confidence: confidence, rows: rows, lying: lyingOwners,
                       usedGravity: usedGravity,
                       declineReason: "O quadrilátero estimado não faz sentido")
     }
@@ -311,7 +329,7 @@ enum ShelfGeometry {
     let mostPopulated = usable.max { $0.indices.count < $1.indices.count }
     let exportedBaseLine: Projective.H? = mostPopulated.map { ($0.slope, -1, $0.intercept) }
 
-    return Estimate(quad: quad, confidence: confidence, rows: rows, lying: lyingIdx,
+    return Estimate(quad: quad, confidence: confidence, rows: rows, lying: lyingOwners,
                     usedGravity: usedGravity, bestBaseLine: exportedBaseLine, declineReason: nil)
   }
 
