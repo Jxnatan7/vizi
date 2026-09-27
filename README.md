@@ -31,20 +31,36 @@ npm run web:lint
 
 ## mobile/ — o app
 
-React Native + Expo, com módulo nativo para inferência: Core ML na ANE no iOS,
-LiteRT com delegate de GPU no Android.
+React Native + Expo, com um Expo Module nativo que faz o trabalho pesado:
+câmera, Core ML, overlay, captura e retificação. O iOS vem primeiro, medido num
+iPhone 14 Plus; o Android fica para o fim e ainda não começou.
 
-Ainda não implementado. O projeto está configurado para **Spec-Driven
-Development** com [GitHub Spec Kit](https://github.com/github/spec-kit): a
-constituição e os marcos estão escritos, e nada é implementado fora do ciclo
-`specify → clarify → plan → tasks → implement`.
+O que existe hoje, spec a spec:
+
+- **A premissa se sustentou.** A inferência custa **3,1 ms** de mediana no
+  Neural Engine — 90× mais rápida que o protótipo web no mesmo aparelho.
+- **Câmera ao vivo a 60 fps**, com inferência em todo frame e telemetria
+  construída no próprio app: sem Mac, não há Instruments.
+- **Caixas e máscaras** desenhadas sobre a imagem sem perder um quadro.
+- **Apontar, apertar, contar.** Uma foto de 12 MP conta os livros, endireita a
+  estante e guarda o resultado num histórico.
+- **Faixa de interesse.** A pessoa escolhe com os dedos a prateleira que conta.
+
+As duas últimas têm o código completo e ainda fecham portões no aparelho. O
+estado de cada spec, com as medições, está em [mobile/README.md](mobile/README.md).
+
+Tudo sai do Linux, sem Mac: o GitHub Actions compila, e a assinatura e a
+instalação no iPhone são locais.
+
+O desenvolvimento é **dirigido por spec**, com
+[GitHub Spec Kit](https://github.com/github/spec-kit). Nada é implementado fora
+do ciclo `perguntar → specify → plan → tasks → implement`, e uma spec só fecha
+com o portão medido no aparelho. As regras estão na
+[constituição](mobile/.specify/memory/constitution.md).
 
 ```bash
 cd mobile && claude      # as skills vivem em mobile/.claude/skills/
 ```
-
-Ver [mobile/README.md](mobile/README.md) e
-[a constituição](mobile/.specify/memory/constitution.md).
 
 ## Por que não há workspaces
 

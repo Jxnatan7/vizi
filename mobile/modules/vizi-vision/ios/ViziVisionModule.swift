@@ -273,8 +273,11 @@ public class ViziVisionModule: Module {
     // `onBandChange` só quando a faixa chega (tabela do `setBandMode` no
     // contrato).
     AsyncFunction("setBandMode") { (raw: String) in
-      guard let mode = BandMode(rawValue: raw),
-            let change = self.coordinator.band.setMode(mode) else { return }
+      guard let mode = BandMode(rawValue: raw) else { return }
+      // Um dedo ainda na faixa termina aqui, dentro dos limites: a troca parte
+      // do estado assentado, e o gesto não escreve mais nada por cima dela.
+      PreviewSink.shared.view?.finishBandGesture()
+      guard let change = self.coordinator.band.setMode(mode) else { return }
       guard let view = PreviewSink.shared.view else {
         // Sem view, não há mola a esperar.
         self.coordinator.band.commit()
@@ -491,13 +494,20 @@ public class ViziVisionModule: Module {
                 : "só rotação — \(estimate.declineReason ?? out.fallbackReason ?? "motivo desconhecido")"
 
               if options.diagnostics {
+                // Os livros que a faixa descartou, no espaço do retrato: sem
+                // eles, "contou errado" e "a faixa cortou" parecem iguais
+                // (FR-022).
+                let discarded = result.instances
+                  .filter { !bandAtTouch.band.contains($0, imageSide: bandSide, membership: membership) }
+                  .map { CGRect(x: CGFloat($0.x) * kx, y: CGFloat($0.y) * ky,
+                                width: CGFloat($0.width) * kx, height: CGFloat($0.height) * ky) }
                 // Sobre a foto CRUA: horizonte, pontos de fuga, recorte e a
                 // curva. Uma captura passa a dizer qual etapa falhou.
                 if let diag = Diagnostics.draw(
                   portrait: portrait, context: self.ciContext,
                   horizon: horizonPortrait, verticalVP: out.verticalVP,
                   horizontalVP: horizontalVP, cropQuad: out.sourceQuad,
-                  scores: azimuthScores) {
+                  scores: azimuthScores, band: bandAtTouch.band, discarded: discarded) {
                   displayBuffer = diag
                   imageReplaced = true
                 }

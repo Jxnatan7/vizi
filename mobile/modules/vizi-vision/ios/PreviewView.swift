@@ -45,6 +45,20 @@ final class PreviewView: ExpoView {
     recognizer.host = self
     return recognizer
   }()
+  /// Dois toques dentro da faixa: de volta ao centro e à espessura padrão
+  /// (FR-013). O reconhecedor da faixa só começa quando o dedo anda, então os
+  /// toques chegam aqui inteiros.
+  private lazy var bandDoubleTap: UITapGestureRecognizer = {
+    let recognizer = UITapGestureRecognizer(target: self, action: #selector(bandDoubleTapped(_:)))
+    recognizer.numberOfTapsRequired = 2
+    return recognizer
+  }()
+  /// A faixa para o VoiceOver (FR-021, R25).
+  private lazy var bandAccessibility: BandAccessibilityElement = {
+    let element = BandAccessibilityElement(accessibilityContainer: self)
+    element.host = self
+    return element
+  }()
 
   /// O estado da faixa. Chega pelo `PreviewSink`, como o `store`.
   ///
@@ -79,6 +93,7 @@ final class PreviewView: ExpoView {
     // Sem isto a view só recebe o primeiro dedo, e a pinça nunca começa.
     isMultipleTouchEnabled = true
     addGestureRecognizer(bandGesture)
+    addGestureRecognizer(bandDoubleTap)
     backgroundColor = .black
     PreviewSink.shared.view = self
   }
@@ -112,18 +127,12 @@ final class PreviewView: ExpoView {
     bandRenderer.apply(snapshot.band, animated: animated)
   }
 
-  /// Uma troca de modo pela cápsula (`setBandMode`): a faixa vai numa mola,
-  /// com retorno tátil, e quem espelha só fica sabendo quando ela chega —
-  /// nunca no meio do caminho (contrato da 005).
+  /// Uma troca que não vem do arrasto — a cápsula, dois toques, o VoiceOver:
+  /// a faixa vai numa mola, com retorno tátil, e quem espelha só fica sabendo
+  /// quando ela chega — nunca no meio do caminho (contrato da 005).
   ///
   /// O modelo já está no destino; isto só anima e avisa.
   func transitionBand(to band: Band) {
-    // Um dedo segurando a faixa escreveria por cima da troca no quadro
-    // seguinte: o gesto acaba aqui, e a troca vale.
-    if bandGesture.state == .began || bandGesture.state == .changed {
-      bandGesture.isEnabled = false
-      bandGesture.isEnabled = true
-    }
     bandTransition &+= 1
     let token = bandTransition
     bandRenderer.feedback.changed()
@@ -133,11 +142,45 @@ final class PreviewView: ExpoView {
     }
   }
 
-  /// Some na captura e no resultado (FR-020), e o gesto desliga junto: mexer
-  /// na faixa ali mudaria um estado que a captura já leu.
+  /// Um gesto em curso termina aqui, com a faixa dentro dos limites. Quem
+  /// muda a faixa por fora chama antes de ler o estado: senão o gesto
+  /// escreveria por cima da troca no quadro seguinte.
+  func finishBandGesture() {
+    bandGesture.finish()
+  }
+
+  /// Some na captura e no resultado (FR-020), e os gestos desligam junto:
+  /// mexer na faixa ali mudaria um estado que a captura já leu.
   func setBandVisible(_ visible: Bool, animated: Bool) {
+    if !visible { bandGesture.finish() }
     bandRenderer.setVisible(visible, animated: animated)
     bandGesture.isEnabled = visible
+    bandDoubleTap.isEnabled = visible
+  }
+
+  @objc private func bandDoubleTapped(_ recognizer: UITapGestureRecognizer) {
+    guard recognizer.state == .ended, let bandModel else { return }
+    let (band, policy, _) = bandModel.read()
+    guard band.mode != .off,
+          band.rect(in: bandImageRect).contains(recognizer.location(in: self)) else { return }
+    setBand(Band(mode: band.mode, center: 0.5, thickness: policy.defaultThickness))
+  }
+
+  /// Uma faixa nova, de uma vez: escreve e anima como uma troca de modo.
+  private func setBand(_ band: Band) {
+    bandModel?.write(band)
+    transitionBand(to: band)
+  }
+
+  /// Só a faixa ligada e em cena é um elemento. Desligada, quem a religa é a
+  /// cápsula.
+  override var accessibilityElements: [Any]? {
+    get {
+      guard bandGesture.isEnabled, let band = bandModel?.read().band,
+            band.mode != .off else { return [] }
+      return [bandAccessibility]
+    }
+    set {}
   }
 
   /// A volta do resultado terminou: a faixa reaparece como estava (R27).
@@ -266,12 +309,18 @@ extension PreviewView: BandGestureHost {
 
   var bandPolicy: BandPolicy { bandModel?.read().policy ?? .unset }
 
+  var currentBand: Band? { bandModel?.read().band }
+
   func beginBandGesture() -> Band? {
-    guard let bandModel, bandModel.read().band.mode != .off else { return nil }
+    guard bandModel != nil else { return nil }
     // O gesto corta a mola de uma troca de modo: quem avisa agora é o fim dele.
     bandTransition &+= 1
     bandRenderer.feedback.prepare()
     return bandRenderer.freezeAtPresentation()
+  }
+
+  func presentedBand() -> Band {
+    bandRenderer.freezeAtPresentation()
   }
 
   func moveBand(to band: Band) {
@@ -279,8 +328,66 @@ extension PreviewView: BandGestureHost {
     bandRenderer.apply(band, animated: false)
   }
 
-  func endBandGesture() {
+  func springBand(to band: Band) {
+    bandModel?.write(band)
+    bandRenderer.feedback.changed()
+    bandRenderer.apply(band, animated: true)
+  }
+
+  func switchOffBand(remembering previous: Band) {
+    guard let off = bandModel?.switchOff(remembering: previous) else { return }
+    bandRenderer.feedback.changed()
+    bandRenderer.apply(off, animated: true)
+  }
+
+  func bandTouchedLimit() {
+    bandRenderer.feedback.limit()
+  }
+
+  func endBandGesture(settleTo final: Band?) {
+    // Além de um limite, a faixa volta numa mola (FR-014). Quem espelha fica
+    // sabendo do destino já: é uma mudança discreta, não um quadro.
+    if let final, final != bandRenderer.band {
+      bandModel?.write(final)
+      bandRenderer.apply(final, animated: true)
+    }
     bandModel?.commit()
+  }
+}
+
+extension PreviewView: BandAccessibilityHost {
+  func performBandAction(_ action: BandAction) {
+    guard let bandModel else { return }
+    bandGesture.finish()
+    let (band, policy, _) = bandModel.read()
+    guard band.mode != .off else { return }
+    // Um passo é a espessura mínima: pequeno o bastante para acertar uma
+    // prateleira, grande o bastante para não precisar de vinte.
+    let step = policy.minThickness
+    switch action {
+    case .move(let direction):
+      setBand(Band(mode: band.mode, center: band.center + Double(direction) * step,
+                   thickness: band.thickness).limited(minThickness: step))
+    case .thicken:
+      setBand(Band(mode: band.mode, center: band.center, thickness: band.thickness + step)
+        .limited(minThickness: step))
+    case .thin:
+      setBand(Band(mode: band.mode, center: band.center, thickness: band.thickness - step)
+        .limited(minThickness: step))
+    case .center:
+      setBand(Band(mode: band.mode, center: 0.5, thickness: policy.defaultThickness))
+    case .flip:
+      if let change = bandModel.setMode(band.mode == .horizontal ? .vertical : .horizontal) {
+        transitionBand(to: change.to)
+      }
+    case .switchOff:
+      if let change = bandModel.setMode(.off) { transitionBand(to: change.to) }
+    }
+    // Ao ajustar, o VoiceOver já relê o valor sozinho. Depois de uma ação, ele
+    // relê a faixa onde ela foi parar — ou solta o foco, se ela saiu de cena.
+    if case .move = action { return }
+    let focus: Any? = bandModel.read().band.mode == .off ? nil : bandAccessibility
+    UIAccessibility.post(notification: .layoutChanged, argument: focus)
   }
 }
 

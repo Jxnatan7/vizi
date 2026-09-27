@@ -72,6 +72,20 @@ struct Band: Equatable {
   }
 }
 
+extension Band {
+  /// A faixa pelas bordas, no eixo em que ela é limitada.
+  init(mode: BandMode, lower: Double, upper: Double) {
+    self.init(mode: mode, center: (lower + upper) / 2, thickness: upper - lower)
+  }
+
+  /// Inteira dentro da imagem, e nunca mais fina que o mínimo (FR-014).
+  func limited(minThickness: Double) -> Band {
+    let t = min(max(thickness, minThickness), 1)
+    let half = t / 2
+    return Band(mode: mode, center: min(max(center, half), 1 - half), thickness: t)
+  }
+}
+
 /// Comportamento da faixa. Vem do TypeScript, em `SessionOptions.band` —
 /// princípio IV. O que cada campo decide está no data-model da 005.
 struct BandPolicy {
@@ -182,5 +196,17 @@ final class BandModel {
     band = to
     generation &+= 1
     return (from, to)
+  }
+
+  /// Desligada pelos dedos (FR-012). Religar volta a `previous` — a faixa de
+  /// antes do gesto, não a que os dedos abriram até a moldura. Desligada
+  /// também, a última ligada continua a que era.
+  func switchOff(remembering previous: Band) -> Band {
+    lock.lock(); defer { lock.unlock() }
+    if previous.mode != .off { lastOn = previous }
+    let base = lastOn ?? previous
+    band = Band(mode: .off, center: base.center, thickness: base.thickness)
+    generation &+= 1
+    return band
   }
 }

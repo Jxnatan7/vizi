@@ -298,6 +298,89 @@ final class BandRenderer {
   }
 }
 
+/// O que dá para fazer com a faixa sem gesto nenhum (FR-021).
+enum BandAction {
+  /// Um passo no eixo livre: +1 para baixo, ou para a direita.
+  case move(Int)
+  case thicken
+  case thin
+  case flip
+  case center
+  case switchOff
+}
+
+/// Quem executa o que o VoiceOver pede à faixa — a `PreviewView`.
+protocol BandAccessibilityHost: AnyObject {
+  var currentBand: Band? { get }
+  var bandImageRect: CGRect { get }
+  func performBandAction(_ action: BandAction)
+}
+
+/// A faixa para o VoiceOver (FR-021, R25): um elemento ajustável — deslizar
+/// para cima ou para baixo a move um passo de `minThickness` — com as ações
+/// virar, engrossar, afinar, voltar ao centro e desligar.
+///
+/// Tudo é lido na hora, do estado da faixa: o elemento não guarda nada que um
+/// gesto possa deixar para trás.
+final class BandAccessibilityElement: UIAccessibilityElement {
+  weak var host: BandAccessibilityHost?
+
+  override var accessibilityLabel: String? {
+    get { host?.currentBand?.mode == .vertical ? "Faixa vertical" : "Faixa horizontal" }
+    set {}
+  }
+
+  override var accessibilityValue: String? {
+    get {
+      guard let band = host?.currentBand, band.mode != .off else { return nil }
+      let from = band.mode == .vertical ? "da esquerda" : "do topo"
+      return "\(Self.percent(band.center)) \(from), espessura \(Self.percent(band.thickness))"
+    }
+    set {}
+  }
+
+  override var accessibilityTraits: UIAccessibilityTraits {
+    get { .adjustable }
+    set {}
+  }
+
+  override var accessibilityFrameInContainerSpace: CGRect {
+    get {
+      guard let host, let band = host.currentBand, band.mode != .off else { return .zero }
+      return band.rect(in: host.bandImageRect)
+    }
+    set {}
+  }
+
+  override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
+    get {
+      let actions: [(name: String, action: BandAction)] = [
+        ("Virar", .flip), ("Engrossar", .thicken), ("Afinar", .thin),
+        ("Voltar ao centro", .center), ("Desligar", .switchOff),
+      ]
+      return actions.map { entry in
+        UIAccessibilityCustomAction(name: entry.name) { [weak self] _ in
+          self?.host?.performBandAction(entry.action)
+          return true
+        }
+      }
+    }
+    set {}
+  }
+
+  override func accessibilityIncrement() {
+    host?.performBandAction(.move(1))
+  }
+
+  override func accessibilityDecrement() {
+    host?.performBandAction(.move(-1))
+  }
+
+  private static func percent(_ value: Double) -> String {
+    "\(Int((value * 100).rounded()))%"
+  }
+}
+
 /// Retorno tátil nos encaixes (FR-016, R24).
 ///
 /// Disparado no nativo, onde o evento nasce: sem ida e volta pela ponte, o

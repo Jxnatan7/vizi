@@ -19,7 +19,9 @@ enum Diagnostics {
     verticalVP: Projective.H?,
     horizontalVP: Projective.H?,
     cropQuad: [CGPoint],
-    scores: [Double]
+    scores: [Double],
+    band: Band,
+    discarded: [CGRect]
   ) -> CVPixelBuffer? {
     let w = Int(image.extent.width.rounded()), h = Int(image.extent.height.rounded())
     guard w > 1, h > 1 else { return nil }
@@ -52,6 +54,31 @@ enum Diagnostics {
     ctx.setLineWidth(max(2, CGFloat(w) / 400))
 
     let W = Double(w), H = Double(h)
+
+    // A faixa da captura, primeiro, para o resto ficar por cima: fora dela
+    // escurecido, as bordas em branco. A foto e a imagem canônica têm os
+    // mesmos eixos, então a faixa normalizada vale aqui como lá.
+    if band.mode != .off {
+      let frame = CGRect(x: 0, y: 0, width: W, height: H)
+      let inside = band.rect(in: frame)
+      ctx.setFillColor(UIColor.black.withAlphaComponent(0.45).cgColor)
+      ctx.addRect(frame)
+      ctx.addRect(inside)
+      ctx.fillPath(using: .evenOdd)
+      ctx.setStrokeColor(UIColor.white.cgColor)
+      ctx.stroke(inside)
+    }
+
+    // Os livros que a faixa descartou — vermelho, riscados.
+    if !discarded.isEmpty {
+      ctx.setStrokeColor(UIColor.red.cgColor)
+      for r in discarded {
+        ctx.addRect(r)
+        ctx.move(to: CGPoint(x: r.minX, y: r.minY)); ctx.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+        ctx.move(to: CGPoint(x: r.maxX, y: r.minY)); ctx.addLine(to: CGPoint(x: r.minX, y: r.maxY))
+      }
+      ctx.strokePath()
+    }
 
     // Horizonte — amarelo. Tudo que é horizontal no mundo converge sobre ele.
     if let l = horizon {

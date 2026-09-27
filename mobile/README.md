@@ -10,14 +10,15 @@ App React Native + Expo de detecção e segmentação em tempo real, on-device.
 | **002 · Câmera ao vivo e telemetria** | ✅ concluído | 32 de 32 |
 | **003 · Caixas e máscaras** | ✅ portão atingido | 26 de 29 |
 | **004 · Captura e resultado** | 🟡 código completo, falta o aparelho | 37 de 38 |
+| **005 · Faixa de interesse** | 🟡 código completo, faltam dois portões no aparelho | 41 de 44 |
 | Acabamento e adaptação | — | |
 | Android | — | |
 
 A sequência se afastou da tabela de marcos da constituição, e cada desvio foi
 registrado na spec que o fez. As máscaras (antigo marco 5) entraram na 003. Os
 três relógios (antigo marco 4) foram descartados em 16/09: a 60 fps não sobra
-intervalo entre detecções para disfarçar. A 004 é o primeiro marco de produto,
-e não estava na tabela.
+intervalo entre detecções para disfarçar. A 004 e a 005 são marcos de produto,
+e não estavam na tabela.
 
 ### Marco 1 — a inferência cabe, com folga de uma ordem de grandeza
 
@@ -94,6 +95,32 @@ divisões, numa transição contínua a partir do que estava na tela.
 entre código e spec e acrescentou o histórico — tudo escrito e ainda sem
 build. A T034 (SC-007) valida o histórico e, junto, o resto.
 
+### Faixa de interesse — dizer o que contar
+
+A 004 deu uma contagem; a 005 deixa dizer **o quê** contar. Com duas ou três
+prateleiras no quadro, a captura passa a ser "esta prateleira".
+
+- **Uma faixa, horizontal ou vertical — ou nenhuma.** Toda sessão começa com
+  ela no terço do meio. Fora dela a imagem escurece, e só conta o livro com a
+  maior parte da caixa dentro: ao vivo e na captura, que filtra antes da
+  geometria.
+- **O modelo continua lendo a imagem inteira.** A faixa decide o que é
+  mostrado e contado, não o que é inferido.
+- **Os dedos.** Um dedo move a faixa, ou só uma borda. Dois seguram as duas
+  bordas, e o eixo deles decide a orientação; abertos além da imagem,
+  desligam a faixa; numa faixa desligada, criam uma. Dois toques voltam ao
+  centro. No limite, a faixa resiste e volta numa mola.
+- **Sem gesto.** A cápsula abaixo do preview — imagem toda · horizontal ·
+  vertical — e o VoiceOver, que trata a faixa como um elemento ajustável.
+- **Nada passa pelo React no arrasto.** Gesto, desenho, molas e retorno tátil
+  vivem no nativo; o JavaScript só fica sabendo no fim do gesto ou da troca.
+
+**Faltam dois portões no aparelho.** Contagem (SC-001, SC-002), fluidez
+(SC-003), faixa desligada (SC-006), coluna e o teste com três pessoas foram
+validados pelo autor em 26/09, sem números registrados. Criar e desligar com
+dois dedos (T034) e virar pelos dedos (T036, SC-004) foram escritos no mesmo
+dia e ainda não tiveram build.
+
 ### O que a medição mudou na arquitetura
 
 A premissa era inferência em ≤ 25 ms, e o desenho dos
@@ -116,6 +143,11 @@ e o marco 3 mediu os dois: **2,02 ms**, fora do orçamento do frame.
 - **Com o resultado na tela, a inferência ao vivo continua rodando.** O que
   pausa é a publicação, não o modelo: bateria gasta enquanto a pessoa olha a
   faixa.
+- **Numa mola no meio do gesto, a faixa não segue os dedos.** Ao criar, virar
+  ou renascer, ela vai ao destino em `springResponse` e só então volta a
+  acompanhar: seguir no meio cortaria a mola num salto.
+- **Virar pela cápsula tem uma animação torta.** As bordas passam pela
+  diagonal enquanto o escurecimento passa por um quadrado.
 - **A confiança da geometria não tem calibração registrada.** Os limiares
   foram validados olhando recusas, e até 25/09 o número na tela era outro
   (ver [research da 004](specs/004-captura-resultado/research.md)).
@@ -196,12 +228,13 @@ App.tsx                 abas: câmera, histórico, medição
 src/ui/                 telas
 src/camera/             sessão de câmera e sua política
 src/capture/            captura e sua política — inclusive a da geometria
+src/band/               política da faixa de interesse e o espelho do estado nativo
 src/history/            índice do histórico
 src/overlay/            aparência do overlay
 src/telemetry/          exportação e portão da sessão
 src/bench/              medição controlada do marco 1
 modules/vizi-vision/    Expo Module nativo — câmera, Core ML, overlay,
-                        captura, retificação, transição
+                        captura, retificação, transição, faixa de interesse
 models/                 .mlpackage + shapes verificados
 plugins/                config plugins
 ```

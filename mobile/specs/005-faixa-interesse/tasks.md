@@ -71,8 +71,8 @@ Caminhos relativos a `mobile/`.
 - [X] T018 [US1] Em `capture`, em `modules/vizi-vision/ios/ViziVisionModule.swift`: ler a faixa no toque; esconder a faixa e desligar o reconhecedor; foco da aproximação só com os membros; filtrar as detecções da foto **antes** da geometria e usar o conjunto filtrado em todo o resto — geometria, região, divisões, contagem e overlay; `outsideBandCount` no resultado; em caso de erro, a faixa volta (FR-006, FR-020)
 - [X] T019 [US1] Em `modules/vizi-vision/ios/ResultRenderer.swift`, avisar a `PreviewView` no fim do `dismiss`; ela mostra a faixa como estava e religa o reconhecedor (R27) — também quando o `dismiss` não tem transição a desfazer (captura sem frame congelado), senão a faixa ficaria escondida para sempre
 - [X] T020 [US1] Em `src/ui/CameraScreen.tsx`, a linha "fora da faixa" no resultado, e "Nenhum livro na faixa" quando `count` é zero e `outsideBandCount` não é (cenário 5 da US1)
-- [ ] T021 [US1] 🚦 **SC-001 e SC-002** no aparelho, conforme `specs/005-faixa-interesse/quickstart.md`, itens 1, 3 e 7: a faixa abre no centro; a caixa troca na hora certa; contagem manual da prateleira do meio × captura, dentro de ±10%; dez recortes, só a do meio
-- [ ] T022 [US1] 🚦 **SC-003** conforme `specs/005-faixa-interesse/quickstart.md`, itens 2 e 8: a borda cola no dedo, a tela não rola, e trinta segundos de arrasto contínuo sem nenhuma janela abaixo de 59 fps; registrar `drawMs` com e sem movimento
+- [X] T021 [US1] 🚦 **SC-001 e SC-002** no aparelho, conforme `specs/005-faixa-interesse/quickstart.md`, itens 1, 3 e 7: a faixa abre no centro; a caixa troca na hora certa; contagem manual da prateleira do meio × captura, dentro de ±10%; dez recortes, só a do meio — **validado pelo autor em 26/09**
+- [X] T022 [US1] 🚦 **SC-003** conforme `specs/005-faixa-interesse/quickstart.md`, itens 2 e 8: a borda cola no dedo, a tela não rola, e trinta segundos de arrasto contínuo sem nenhuma janela abaixo de 59 fps; registrar `drawMs` com e sem movimento — **validado pelo autor em 26/09**; os números vão com a T041
 
 **Checkpoint**: a faixa conta uma prateleira. Sozinho, é o pedido original — a linha do meio.
 
@@ -89,7 +89,7 @@ Caminhos relativos a `mobile/`.
 - [X] T025 [P] [US2] Criar `src/band/useBand.ts`: espelha `onBandChange` num estado de React, escrito só em mudança discreta, e expõe `setMode`
 - [X] T026 [P] [US2] Criar `src/ui/BandControl.tsx`: cápsula com três botões — imagem toda · horizontal · vertical —, destaque que desliza com `Animated` e driver nativo, e rótulo e estado para o leitor de tela (FR-011, FR-021)
 - [X] T027 [US2] Em `src/ui/CameraScreen.tsx`, a cápsula logo abaixo do preview, fora da `ScrollView`, escondida durante captura e resultado
-- [ ] T028 [US2] 🚦 **SC-006** conforme `specs/005-faixa-interesse/quickstart.md`, item 9: com a faixa desligada, a contagem da foto fica dentro de ±10% da mediana ao vivo, na mesma cena
+- [X] T028 [US2] 🚦 **SC-006** conforme `specs/005-faixa-interesse/quickstart.md`, item 9: com a faixa desligada, a contagem da foto fica dentro de ±10% da mediana ao vivo, na mesma cena — **validado pelo autor em 26/09**
 
 **Checkpoint**: dá para voltar à imagem toda e religar onde estava.
 
@@ -101,12 +101,12 @@ Caminhos relativos a `mobile/`.
 
 **Independent Test**: ajustar a faixa a uma prateleira baixa e a uma alta; cada uma coberta, sem invadir a vizinha.
 
-- [ ] T029 [US3] Em `modules/vizi-vision/ios/BandGesture.swift`, agarrar uma borda — área de `edgeGrabPoints` para cada lado da linha — move só aquela borda, respeitando `minThickness` (FR-008)
+- [X] T029 [US3] Em `modules/vizi-vision/ios/BandGesture.swift`, agarrar uma borda — área de `edgeGrabPoints` para cada lado da linha — move só aquela borda, respeitando `minThickness` (FR-008)
 - [X] T030 [US3] Em `modules/vizi-vision/ios/BandGesture.swift`, dois dedos: pinça em torno do ponto médio — espessura escala com a distância, centro acompanha o ponto médio —, sem salto no toque; passagens de um para dois dedos e de dois para um refazem a referência, também sem salto (FR-009, R22)
-- [ ] T031 [US3] Em `modules/vizi-vision/ios/BandGesture.swift`, elástico além dos limites (`rubberBand`), mola de volta ao soltar, e impacto leve na primeira vez que encosta num limite ou na espessura mínima (FR-014, FR-016)
-- [ ] T032 [US3] Em `modules/vizi-vision/ios/PreviewView.swift`, dois toques dentro da faixa a devolvem ao centro e à `defaultThickness`, na mesma orientação, com mola e retorno tátil (FR-013)
-- [ ] T033 [US3] Em `modules/vizi-vision/ios/BandGesture.swift`, dois dedos com a faixa desligada a criam entre eles, orientada pelo eixo; as duas bordas além da imagem por mais de `offMargin` a desligam, e voltar os dedos no mesmo gesto a faz renascer (FR-012 — os cenários 2 e 3 da US2)
-- [ ] T034 [US3] 🚦 Conforme `specs/005-faixa-interesse/quickstart.md`, itens 4 e 5: o segundo dedo pousa sem salto, espessura e posição andam juntas, abrir desliga, pinçar cria
+- [X] T031 [US3] Em `modules/vizi-vision/ios/BandGesture.swift`, elástico além dos limites (`rubberBand`), mola de volta ao soltar, e impacto leve na primeira vez que encosta num limite ou na espessura mínima (FR-014, FR-016)
+- [X] T032 [US3] Em `modules/vizi-vision/ios/PreviewView.swift`, dois toques dentro da faixa a devolvem ao centro e à `defaultThickness`, na mesma orientação, com mola e retorno tátil (FR-013)
+- [X] T033 [US3] Em `modules/vizi-vision/ios/BandGesture.swift`, dois dedos com a faixa desligada a criam entre eles, orientada pelo eixo; as duas bordas além da imagem por mais de `offMargin` a desligam, e voltar os dedos no mesmo gesto a faz renascer (FR-012 — os cenários 2 e 3 da US2)
+- [ ] T034 [US3] 🚦 Conforme `specs/005-faixa-interesse/quickstart.md`, itens 4 e 5: o segundo dedo pousa sem salto, espessura e posição andam juntas, abrir desliga, pinçar cria — **aberto:** testa a T033, escrita em 26/09 e ainda sem build
 
 **Checkpoint**: a faixa se ajusta a qualquer prateleira.
 
@@ -118,9 +118,9 @@ Caminhos relativos a `mobile/`.
 
 **Independent Test**: virar a faixa sobre uma coluna e capturar só aquela coluna.
 
-- [ ] T035 [US4] Em `modules/vizi-vision/ios/BandGesture.swift`, a orientação pelo ângulo entre os dedos: acima de 45° + `flipHysteresisDegrees`, horizontal; abaixo de 45° menos a folga, vertical; entre os dois, mantém. Ao virar, a faixa se refaz entre os dedos no novo eixo, numa mola com retorno tátil, e a pinça recomeça dali (FR-010, R22)
-- [ ] T036 [US4] 🚦 **SC-004** conforme `specs/005-faixa-interesse/quickstart.md`, item 4: dez viradas pelos dedos, dez na primeira tentativa, sem tremular — ajustar `flipHysteresisDegrees` até passar
-- [ ] T037 [US4] 🚦 Faixa vertical sobre uma coluna, conforme `specs/005-faixa-interesse/quickstart.md`, item 7: a captura conta, endireita e recorta só a coluna (cenário 4 da US4)
+- [X] T035 [US4] Em `modules/vizi-vision/ios/BandGesture.swift`, a orientação pelo ângulo entre os dedos: acima de 45° + `flipHysteresisDegrees`, horizontal; abaixo de 45° menos a folga, vertical; entre os dois, mantém. Ao virar, a faixa se refaz entre os dedos no novo eixo, numa mola com retorno tátil, e a pinça recomeça dali (FR-010, R22)
+- [ ] T036 [US4] 🚦 **SC-004** conforme `specs/005-faixa-interesse/quickstart.md`, item 4: dez viradas pelos dedos, dez na primeira tentativa, sem tremular — ajustar `flipHysteresisDegrees` até passar — **aberto:** testa a T035, escrita em 26/09 e ainda sem build
+- [X] T037 [US4] 🚦 Faixa vertical sobre uma coluna, conforme `specs/005-faixa-interesse/quickstart.md`, item 7: a captura conta, endireita e recorta só a coluna (cenário 4 da US4) — **validado pelo autor em 26/09**
 
 **Checkpoint**: as duas orientações, pelo gesto e pela cápsula.
 
@@ -128,13 +128,13 @@ Caminhos relativos a `mobile/`.
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T038 [P] Em `modules/vizi-vision/ios/BandRenderer.swift`, a faixa como elemento de acessibilidade ajustável — deslizar move um passo de `minThickness` — com as ações virar, engrossar, afinar, voltar ao centro e desligar (FR-021, R25)
-- [ ] T039 [P] Em `modules/vizi-vision/ios/Diagnostics.swift`, e na chamada em `capture`, desenhar a faixa e os livros descartados sobre a foto crua (FR-022)
-- [ ] T040 🚦 **SC-005**: o teste de uso com três pessoas, conforme `specs/005-faixa-interesse/quickstart.md`; anotar onde cada uma hesitou
-- [ ] T041 Registrar as medições e os valores ajustados em `specs/005-faixa-interesse/research.md`, fechando R18 a R27 — R28 segue adiada
-- [ ] T042 Auditar a fronteira em `modules/vizi-vision/ios/ViziVisionModule.swift` e `src/band/useBand.ts`: `onBandChange` só em mudança discreta, nada atravessa durante o arrasto (princípio III)
-- [ ] T043 Auditar o Swift em `modules/vizi-vision/ios/`: nenhum valor da faixa fixo no nativo, e as guardas classificadas como na T037 da 004
-- [ ] T044 Atualizar `mobile/README.md`
+- [X] T038 [P] Em `modules/vizi-vision/ios/BandRenderer.swift`, a faixa como elemento de acessibilidade ajustável — deslizar move um passo de `minThickness` — com as ações virar, engrossar, afinar, voltar ao centro e desligar (FR-021, R25)
+- [X] T039 [P] Em `modules/vizi-vision/ios/Diagnostics.swift`, e na chamada em `capture`, desenhar a faixa e os livros descartados sobre a foto crua (FR-022)
+- [X] T040 🚦 **SC-005**: o teste de uso com três pessoas, conforme `specs/005-faixa-interesse/quickstart.md`; anotar onde cada uma hesitou — **validado pelo autor em 26/09**
+- [ ] T041 Registrar as medições e os valores ajustados em `specs/005-faixa-interesse/research.md`, fechando R18 a R27 — R28 segue adiada — **aberto:** depende da T034, da T036 e dos números das sessões
+- [X] T042 Auditar a fronteira em `modules/vizi-vision/ios/ViziVisionModule.swift` e `src/band/useBand.ts`: `onBandChange` só em mudança discreta, nada atravessa durante o arrasto (princípio III) — **passou.** `commit()` só no começo da sessão, no fim do gesto — também quando a cápsula ou a captura o encerram — e no fim da mola de uma troca; nada no arrasto nem nas molas do meio do gesto. `useBand` escreve estado só no evento e no toque da cápsula
+- [X] T043 Auditar o Swift em `modules/vizi-vision/ios/`: nenhum valor da faixa fixo no nativo, e as guardas classificadas como na T037 da 004 — **passou.** Nenhum comportamento nem aparência da faixa fixos no Swift. Ficam a geometria da própria spec (diagonal de 45°, dois dedos, dois toques, 0 e 1 como bordas da imagem, centro 0,5), as guardas contra entrada degenerada (`> 0`, `max(distância, 1)`, `1e-9` de arredondamento), o estado inválido de propósito antes da sessão, as proporções da pílula derivadas de `bandCountFontSize` e as cores do diagnóstico, como as que já estavam lá
+- [X] T044 Atualizar `mobile/README.md`
 
 ---
 
