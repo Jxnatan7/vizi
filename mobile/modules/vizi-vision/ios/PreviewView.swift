@@ -158,6 +158,16 @@ final class PreviewView: ExpoView {
     bandDoubleTap.isEnabled = visible
   }
 
+  /// Com o quadro de uma marca parado, a faixa fica à vista e os gestos travam
+  /// (spec 007, R37): mexer nela mudaria o que aparece, e a tela deixaria de
+  /// ser o que foi gravado. Destravar só religa se a faixa estiver em cena.
+  func setBandLocked(_ locked: Bool) {
+    if locked { bandGesture.finish() }
+    let enabled = !locked && bandRenderer.visible
+    bandGesture.isEnabled = enabled
+    bandDoubleTap.isEnabled = enabled
+  }
+
   @objc private func bandDoubleTapped(_ recognizer: UITapGestureRecognizer) {
     guard recognizer.state == .ended, let bandModel else { return }
     let (band, policy, _) = bandModel.read()

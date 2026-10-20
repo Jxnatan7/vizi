@@ -28,11 +28,18 @@ final class BandRenderer {
   private var orientation = BandMode.horizontal
   private var image = CGRect.zero
   private var bounds = CGRect.zero
-  private var visible = true
+  private(set) var visible = true
 
   /// Contagens recentes, para a mediana (R23).
   private var samples: [(time: CFTimeInterval, count: Int)] = []
   private var shownCount: Int?
+
+  /// A contagem que a pílula mostra agora, ou `nil` quando ela não aparece —
+  /// faixa desligada ou fora de cena. É o que uma marca registra como "a
+  /// contagem que a tela mostrava" (spec 007, R37).
+  var displayedCount: Int? {
+    visible && band.mode != .off ? shownCount : nil
+  }
 
   init() {
     dimLayer.fillRule = .evenOdd

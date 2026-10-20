@@ -21,6 +21,11 @@ enum Reread {
     var shelves: [Rectify.Shelf]
     var rowCount: Int
     var lyingCount: Int
+    /// O que a coleta guarda da releitura (spec 007): o quadrado, onde o
+    /// recorte está nele, a regra das bordas e o resultado inteiro, com as
+    /// detecções que a regra deixou de fora. Só referências; a lista que conta
+    /// não muda. Vazio quando a leitura é a da foto.
+    var trace: CollectionTrace.RereadTrace? = nil
   }
 
   /// O recorte sem a margem, no espaço do quadrado: a extensão dos livros que

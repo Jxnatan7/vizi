@@ -332,6 +332,16 @@ export type CaptureResult = {
    * que zero, não há livros **na faixa** — não é a cena que está vazia.
    */
   outsideBandCount: number;
+  /**
+   * O item gravado para esta captura (spec 007), ou `null` sem coleta aberta
+   * ou sem gravação. É a chave do `answerItem`.
+   */
+  collectionItemId: string | null;
+  /**
+   * `'space'` quando a coleta estava aberta e a captura não foi gravada por
+   * falta de espaço; `null` nos outros casos. A captura em si aconteceu igual.
+   */
+  collectionSkipped: 'space' | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -399,4 +409,76 @@ export type HistoryEntry = {
   /** Para exibir na proporção certa sem abrir a imagem. */
   width: number;
   height: number;
+};
+
+// ---------------------------------------------------------------------------
+// Spec 007 — modo coleta
+// ---------------------------------------------------------------------------
+
+/** Política da coleta (princípio IV) e as políticas em vigor, para o registro. */
+export type CollectionOptions = {
+  /**
+   * Até que confiança as detecções são gravadas. A gravação usa o menor entre
+   * este e o limiar da sessão: nunca perde uma detecção que o app contou.
+   */
+  minScore: number;
+  /** Abaixo disto de espaço livre, marcar é recusado e a captura não é gravada. */
+  minFreeBytes: number;
+  /** Qualidade de todas as imagens da coleta, de 0 a 1. */
+  jpegQuality: number;
+  /**
+   * As políticas em vigor — sessão, captura, faixa, aparência e coleta —, como
+   * estão. O nativo grava sem interpretar.
+   */
+  policies: Record<string, unknown>;
+};
+
+/** O que o nativo diz da coleta. Espelhado pelo `onCollectionChange`. */
+export type CollectionState = {
+  open: boolean;
+  /** Ausentes com a coleta fechada. */
+  id?: string;
+  startedAt?: number;
+  marks: number;
+  captures: number;
+  answered: number;
+  bytes: number;
+  /** Abaixo de `minFreeBytes` na última conferência. */
+  lowSpace: boolean;
+  /** O último item que não conseguiu ser gravado, e por quê. */
+  lastError?: string;
+};
+
+/** O que `markFrame` devolve, com o quadro já parado na tela. */
+export type MarkReceipt = {
+  itemId: string;
+  /** A mediana da faixa no toque; null com a faixa desligada. */
+  displayedCount: number | null;
+  /** As detecções do quadro que existem e estão na faixa. */
+  frameCount: number;
+};
+
+/** Uma sessão de coleta, para a lista. */
+export type CollectionSummary = {
+  id: string;
+  name: string | null;
+  startedAt: number;
+  endedAt: number | null;
+  /** A aberta aparece na lista, sem exportar. */
+  open: boolean;
+  endReason: 'stopped' | 'background' | 'recovered' | null;
+  marks: number;
+  captures: number;
+  answered: number;
+  bytes: number;
+  exportedAt: number | null;
+};
+
+/** O que `exportCollection` devolve quando o menu de compartilhar fecha. */
+export type ExportOutcome = {
+  /** Relativo à pasta de documentos — o absoluto muda a cada reinstalação. */
+  file: string;
+  bytes: number;
+  /** false quando a pessoa fechou o menu sem compartilhar. O zip fica. */
+  shared: boolean;
 };

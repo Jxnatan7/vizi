@@ -8,6 +8,7 @@ import { ViziVision, type ModelInfo, type NativeProbe, type Measurement } from '
 import { compareWithReference, type Comparison } from '../bench/compareReference';
 import { DEFAULT_OPTIONS, runBenchmark } from '../bench/runBenchmark';
 import { ms } from '../bench/stats';
+import { CollectionList } from './CollectionList';
 import { Button, Card, Row } from './parts';
 import { colors } from './theme';
 
@@ -79,6 +80,9 @@ export default function BenchScreen() {
             <Text style={[styles.mono, { color: c.ink }]}>{error}</Text>
           </Card>
         )}
+
+        {/* Spec 007: as sessões do modo coleta moram aqui, longe da câmera. */}
+        <CollectionList c={c} />
 
         {probe && (
           <Card c={c} border={c.line} label="APARELHO">

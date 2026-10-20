@@ -47,8 +47,10 @@ O que existe hoje, spec a spec:
 - **Faixa de interesse.** A pessoa escolhe com os dedos a prateleira que conta.
 - **Releitura do recorte.** A contagem é a da imagem na tela: o recorte
   endireitado, lido por último pelo modelo, com as caixas sobre ele.
+- **Modo coleta.** Grava capturas e quadros marcados com a contagem real ao
+  lado, e exporta tudo num zip — o gabarito para medir e retreinar o modelo.
 
-As três últimas têm o código completo e ainda fecham portões no aparelho. O
+As quatro últimas têm o código completo e ainda fecham portões no aparelho. O
 estado de cada spec, com as medições, está em [mobile/README.md](mobile/README.md).
 
 Tudo sai do Linux, sem Mac: o GitHub Actions compila, e a assinatura e a

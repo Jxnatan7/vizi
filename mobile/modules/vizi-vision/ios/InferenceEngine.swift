@@ -35,6 +35,11 @@ final class InferenceEngine {
   private(set) var requestedComputeUnits = "all"
   private(set) var compiledAtRuntime = false
   private(set) var compileMs: Double = 0
+  /// SHA-256 dos pesos e de qual arquivo saiu (spec 007, R45). É o que separa
+  /// as sessões de coleta de um modelo das de outro, depois de um retreino.
+  private(set) var weightsDigest: (sha256: String, source: String)?
+  /// Os metadados que o export grava no modelo — data, versão, `imgsz`, classes.
+  private(set) var modelMetadata: [String: String] = [:]
 
   // MARK: - Carga
 
@@ -70,6 +75,9 @@ final class InferenceEngine {
     }
 
     classes = parseClassNames(from: desc.metadata)
+    modelMetadata = desc.metadata[.creatorDefinedKey] as? [String: String] ?? [:]
+    // Uma vez, na carga: ~6 MB, alguns milissegundos.
+    weightsDigest = ModelAssets.weightsDigest(compiled: url)
     model = m
     referenceBuffer = try makeReferenceBuffer()
   }
@@ -140,6 +148,12 @@ final class InferenceEngine {
     /// `[1, 32, 160, 160]`. Combinada com os coeficientes de cada instância,
     /// produz a silhueta. **Nunca atravessa a fronteira.**
     var protos: MLMultiArray?
+    /// O tensor cru de detecção, `[1, 4 + nc + 32, 8400]`. A coleta o
+    /// decodifica de novo, com um limiar mais baixo (spec 007, R38).
+    ///
+    /// Segurar a referência é seguro: o Core ML aloca saídas novas a cada
+    /// predição — o projeto não usa `outputBackings`.
+    var detections: MLMultiArray?
   }
 
   /// Marco 1: sobre a imagem de referência embarcada.
@@ -193,7 +207,8 @@ final class InferenceEngine {
       decodeMs: decodeMs,
       cycleMs: (CFAbsoluteTimeGetCurrent() - cycleStart) * 1000,
       instances: instances,
-      protos: protos)
+      protos: protos,
+      detections: detections)
   }
 
   static func thermalStateLabel() -> String {

@@ -3,6 +3,7 @@ import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, use
 
 import type { HistoryEntry } from '../../modules/vizi-vision';
 import { imageUri, listEntries } from '../history/store';
+import { formatDate } from './format';
 import { Button, Card, Row } from './parts';
 import { colors, type Palette } from './theme';
 
@@ -100,17 +101,6 @@ function Entry({ c, entry, onBack }: { c: Palette; entry: HistoryEntry; onBack: 
       </ScrollView>
     </SafeAreaView>
   );
-}
-
-/**
- * dd/mm/aaaa hh:mm, montado à mão: o `toLocaleString` depende do suporte a
- * Intl do motor JavaScript, e errar a data de uma captura é pior que formatar
- * sem biblioteca.
- */
-function formatDate(ms: number): string {
-  const d = new Date(ms);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 const styles = StyleSheet.create({

@@ -71,6 +71,11 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
   private var lastReceived = 0
   private var lastProcessed = 0
 
+  /// Uma marca à espera do próximo quadro processado (spec 007, R37). Sem
+  /// pedido, o laço não paga nada.
+  private let markLock = NSLock()
+  private var pendingMark: CheckedContinuation<CollectionTrace.LiveFrame, Error>?
+
   // MARK: - Ciclo de vida
 
   func start(sampleIntervalMs: Int, mode: TransformMode,
@@ -111,6 +116,8 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
   func stop() -> [String: Any] {
     timer?.cancel()
     timer = nil
+    // Sem câmera, nenhum quadro vai atender a marca.
+    takePendingMark()?.resume(throwing: CollectionRecorder.RecorderError.camera)
     camera.stop()
     results.clear()
     camera.delegate = nil
@@ -168,6 +175,32 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
       throw InferenceEngine.EngineError.imageDecode
     }
     return square
+  }
+
+  // MARK: - Marca (spec 007)
+
+  /// O próximo quadro processado: o buffer da câmera, o quadrado que foi ao
+  /// modelo, o resultado com o tensor cru, a faixa e a gravidade, todos do
+  /// mesmo quadro. Quando a promessa resolve, a tela já está parada nele.
+  func nextFrame() async throws -> CollectionTrace.LiveFrame {
+    try await withCheckedThrowingContinuation { continuation in
+      markLock.lock()
+      guard pendingMark == nil else {
+        markLock.unlock()
+        continuation.resume(throwing: CollectionRecorder.RecorderError.busy)
+        return
+      }
+      pendingMark = continuation
+      markLock.unlock()
+    }
+  }
+
+  private func takePendingMark() -> CheckedContinuation<CollectionTrace.LiveFrame, Error>? {
+    markLock.lock()
+    defer { markLock.unlock() }
+    let taken = pendingMark
+    pendingMark = nil
+    return taken
   }
 
   // MARK: - Amostragem
@@ -293,6 +326,26 @@ final class SessionCoordinator: NSObject, CameraSessionDelegate {
     e2eMs.append(e2e)
     lastInstanceCount = counted
     statsLock.unlock()
+
+    // Uma marca pedida (spec 007, R37): este é o quadro marcado. O preview já
+    // recebeu o quadrado dele, antes da inferência, e o store acabou de
+    // receber as detecções dele, em modo ao vivo. Congelar e pausar aqui, na
+    // mesma fila, garante que nenhum quadro seguinte entre por cima: a tela é
+    // exatamente o que vai ser gravado.
+    if let mark = takePendingMark() {
+      guard !PreviewSink.shared.frozen else {
+        // Uma captura congelou a tela entre o toque e este quadro.
+        mark.resume(throwing: CollectionRecorder.RecorderError.busy)
+        return
+      }
+      _ = PreviewSink.shared.freeze()
+      results.setPaused(true)
+      mark.resume(returning: CollectionTrace.LiveFrame(
+        camera: frame.buffer, square: square, run: result,
+        band: current.band, membership: current.policy.membership,
+        gravity: attitude.snapshot(),
+        presentationSeconds: frame.presentationTime.seconds))
+    }
   }
 
   private func resetWindow() {

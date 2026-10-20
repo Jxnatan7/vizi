@@ -26,7 +26,9 @@ Pod::Spec.new do |s|
   s.resource_bundles = {
     'ViziVisionAssets' => [
       'Resources/vizi-seg.mlpackage',
-      'Resources/reference.jpg'
+      'Resources/reference.jpg',
+      # O formato do zip da coleta, copiado da spec 007 pelo plugin.
+      'Resources/FORMAT.md'
     ]
   }
 end

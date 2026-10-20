@@ -12,6 +12,7 @@ App React Native + Expo de detecção e segmentação em tempo real, on-device.
 | **004 · Captura e resultado** | 🟡 código completo, falta o aparelho | 37 de 38 |
 | **005 · Faixa de interesse** | 🟡 código completo, faltam dois portões no aparelho | 41 de 44 |
 | **006 · Releitura do recorte** | 🟡 código completo, sem build, falta o aparelho | 20 de 26 |
+| **007 · Modo coleta** | 🟡 código completo, sem build, falta o aparelho | 34 de 41 |
 | Acabamento e adaptação | — | |
 | Android | — | |
 
@@ -19,7 +20,8 @@ A sequência se afastou da tabela de marcos da constituição, e cada desvio foi
 registrado na spec que o fez. As máscaras (antigo marco 5) entraram na 003. Os
 três relógios (antigo marco 4) foram descartados em 16/09: a 60 fps não sobra
 intervalo entre detecções para disfarçar. A 004, a 005 e a 006 são marcos de
-produto, e não estavam na tabela.
+produto, e não estavam na tabela. A 007 é ferramenta: existe para medir e
+retreinar o modelo.
 
 ### Marco 1 — a inferência cabe, com folga de uma ordem de grandeza
 
@@ -144,6 +146,32 @@ a pessoa vê.
 Revoga o FR-004 da 004 — agora são duas inferências, ainda sem ladrilhamento.
 **Escrita em 27/09, ainda sem build.**
 
+### Modo coleta — o gabarito do modelo
+
+A contagem erra de jeitos que se repetem: a lombada fina que some, dois
+vizinhos que viram um. Para medir o modelo e treinar o próximo, a 007 grava o
+que ele viu e o que concluiu, com a contagem real ao lado.
+
+- **Sessões.** Ligar o modo na câmera abre uma sessão; desligar fecha. Trocar
+  de aba não fecha; o segundo plano fecha, e um encerramento forçado é fechado
+  na abertura seguinte, sem item pela metade.
+- **Capturas inteiras.** A foto de 12 MP, os quadrados que o modelo leu, o
+  recorte endireitado, as detecções até confiança 0,05 com as máscaras, a
+  geometria e os tempos.
+- **Marcar o ao vivo.** Um toque grava o próximo quadro processado — a imagem
+  e as detecções dele — com a tela parada nele.
+- **A contagem real.** Depois de cada item, o app pede quantos livros aparecem
+  na tela, já preenchido com o número dele.
+- **Nada muda no app.** A coleta decodifica de novo, em segundo plano, o tensor
+  que a inferência já devolveu. Filtrada pelo limiar da sessão, a lista gravada
+  é exatamente a do app — o NMS é guloso por confiança.
+- **Exportar.** Na Medição, cada sessão sai num zip pelo menu de compartilhar,
+  com o formato descrito dentro (`FORMAT.md`). O
+  [`check-zip.py`](specs/007-modo-coleta/tools/check-zip.py) refaz cada
+  contagem a partir do zip e confere o portão.
+
+**Escrita em 19/10, ainda sem build.**
+
 ### O que a medição mudou na arquitetura
 
 A premissa era inferência em ≤ 25 ms, e o desenho dos
@@ -252,12 +280,14 @@ src/ui/                 telas
 src/camera/             sessão de câmera e sua política
 src/capture/            captura e sua política — inclusive a da geometria
 src/band/               política da faixa de interesse e o espelho do estado nativo
+src/collection/         política do modo coleta e o espelho do estado nativo
 src/history/            índice do histórico
 src/overlay/            aparência do overlay
 src/telemetry/          exportação e portão da sessão
 src/bench/              medição controlada do marco 1
 modules/vizi-vision/    Expo Module nativo — câmera, Core ML, overlay,
-                        captura, retificação, transição, faixa de interesse
+                        captura, retificação, transição, faixa de interesse,
+                        coleta
 models/                 .mlpackage + shapes verificados
 plugins/                config plugins
 ```

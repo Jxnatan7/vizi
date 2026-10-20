@@ -2,14 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
-import { PreviewView, type TransformMode } from '../../modules/vizi-vision';
+import { PreviewView, type MarkReceipt, type TransformMode } from '../../modules/vizi-vision';
 import { useBand } from '../band/useBand';
 import { useCapture } from '../capture/useCapture';
 import { useSession } from '../camera/useSession';
+import { collectionMessage, useCollection } from '../collection/useCollection';
 import { copySessionToClipboard, evaluateGate } from '../telemetry/exportSession';
 import { BandControl } from './BandControl';
+import { CollectionIndicator } from './CollectionIndicator';
 import { Button, Card, Row } from './parts';
 import { colors } from './theme';
+import { TruthPrompt } from './TruthPrompt';
 
 /**
  * Marco 2 — fase 2: prova de que os frames chegam.
@@ -29,10 +32,73 @@ export default function CameraScreen() {
   const { band, setMode: setBandMode } = useBand();
   const verdicts = useMemo(() => (session ? evaluateGate(session) : []), [session]);
 
-  // A sessão parou com o resultado na tela: o nativo já o desfez.
+  // O modo coleta (spec 007). `marked` é o quadro parado de uma marca, à
+  // espera da contagem real; `answered`, a resposta já dada à captura na tela.
+  const collection = useCollection();
+  const [marked, setMarked] = useState<MarkReceipt | null>(null);
+  const [marking, setMarking] = useState(false);
+  const [answered, setAnswered] = useState<{ itemId: string; count: number | null } | null>(null);
+  const [collectionError, setCollectionError] = useState<string | null>(null);
+
+  // A sessão parou com o resultado na tela: o nativo já o desfez. Um quadro de
+  // marca parado também: o item dele fica sem resposta.
   useEffect(() => {
-    if (!info) reset();
+    if (!info) {
+      reset();
+      setMarked(null);
+    }
   }, [info, reset]);
+
+  const toggleCollection = async () => {
+    setCollectionError(null);
+    try {
+      if (collection.state.open) await collection.stop();
+      else await collection.start();
+    } catch (e) {
+      setCollectionError(collectionMessage(e));
+    }
+  };
+
+  const markFrame = async () => {
+    setCollectionError(null);
+    setMarking(true);
+    try {
+      setMarked(await collection.mark());
+    } catch (e) {
+      setCollectionError(collectionMessage(e));
+    } finally {
+      setMarking(false);
+    }
+  };
+
+  /** Responde ou pula, e a câmera volta (FR-009). Uma resposta recusada não prende a tela. */
+  const answerMark = async (count: number | null) => {
+    if (!marked) return;
+    try {
+      await collection.answer(marked.itemId, count);
+    } catch (e) {
+      setCollectionError(collectionMessage(e));
+    }
+    try {
+      await collection.resume();
+    } finally {
+      setMarked(null);
+    }
+  };
+
+  /** A captura na tela gravada na coleta, e se a contagem real dela já veio. */
+  const captureItem = state === 'result' ? result?.collectionItemId ?? null : null;
+  const captureAnswered = captureItem !== null && answered?.itemId === captureItem;
+
+  const answerCapture = async (itemId: string, count: number | null) => {
+    try {
+      await collection.answer(itemId, count);
+      setAnswered({ itemId, count });
+    } catch (e) {
+      setCollectionError(collectionMessage(e));
+      setAnswered({ itemId, count: null });
+    }
+  };
 
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: c.bg }]}>
@@ -52,13 +118,36 @@ export default function CameraScreen() {
             Entrada do modelo · {transform}
           </Text>
           {/* A faixa sai de cena na captura e no resultado (FR-020); a
-              cápsula some junto, mas guarda o lugar: os cartões não pulam. */}
-          <BandControl c={c} mode={band?.mode} visible={state === 'live'} onChange={setBandMode} />
+              cápsula some junto, mas guarda o lugar: os cartões não pulam.
+              Com o quadro de uma marca parado, também: mexer na faixa mudaria
+              o que foi gravado (spec 007). */}
+          <BandControl c={c} mode={band?.mode} visible={state === 'live' && !marked}
+            onChange={setBandMode} />
+          {/* Fixo como o visor: gravando é algo que se vê enquanto se aponta. */}
+          {collection.state.open && <CollectionIndicator c={c} state={collection.state} />}
         </View>
       )}
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={[styles.eyebrow, { color: c.muted }]}>MARCO 2 · CÂMERA</Text>
         <Text style={[styles.title, { color: c.ink }]}>vizi</Text>
+
+        {!info && collection.state.open && <CollectionIndicator c={c} state={collection.state} />}
+
+        {collectionError && (
+          <Card c={c} border={c.crit} label="MODO COLETA">
+            <Text style={{ color: c.ink, fontSize: 13, lineHeight: 18 }}>{collectionError}</Text>
+          </Card>
+        )}
+
+        {/* O quadro marcado está parado na tela, como estava (R37). */}
+        {marked && (
+          <TruthPrompt c={c}
+            prefill={marked.displayedCount ?? marked.frameCount}
+            question={band?.mode === 'off'
+              ? 'Quantos livros aparecem no quadro parado?'
+              : 'Quantos livros aparecem dentro da faixa, no quadro parado?'}
+            onAnswer={answerMark} />
+        )}
 
         {__DEV__ && (
           <View style={[styles.banner, { borderColor: c.crit, backgroundColor: c.bgAlt }]}>
@@ -112,10 +201,16 @@ export default function CameraScreen() {
           ))}
         </View>
 
-        {info && state !== 'result' && (
+        {info && state !== 'result' && !marked && (
           <>
-            <Button c={c} onPress={capture} disabled={state === 'capturing'}
+            <Button c={c} onPress={capture} disabled={state === 'capturing' || marking}
               title={state === 'capturing' ? 'Capturando…' : 'Capturar'} />
+            {/* Só ao vivo (FR-010): na captura e no resultado, não há quadro a marcar. */}
+            {collection.state.open && (
+              <Button c={c} onPress={() => void markFrame()}
+                disabled={state !== 'live' || marking}
+                title={marking ? 'Marcando…' : 'Marcar este quadro'} />
+            )}
             <Pressable
               onPress={() => setDiagnostics(!diagnostics)}
               style={[styles.mode, {
@@ -127,6 +222,41 @@ export default function CameraScreen() {
               </Text>
             </Pressable>
           </>
+        )}
+
+        {/* O modo coleta (spec 007). Liga com ou sem câmera; some enquanto um
+            pedido de contagem real está aberto, que a sessão precisa receber. */}
+        {!marked && state !== 'capturing' && !(captureItem && !captureAnswered) && (
+          <Pressable
+            onPress={() => void toggleCollection()}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: collection.state.open }}
+            style={[styles.mode, {
+              borderColor: collection.state.open ? c.crit : c.line,
+              backgroundColor: c.bgAlt,
+            }]}>
+            <Text style={{ color: collection.state.open ? c.crit : c.muted, fontSize: 12, fontWeight: '600' }}>
+              {collection.state.open ? 'modo coleta LIGADO — tocar para desligar' : 'modo coleta'}
+            </Text>
+          </Pressable>
+        )}
+
+        {/* A contagem real da captura, antes do cartão: é o que a coleta pede
+            agora (FR-007). */}
+        {captureItem && !captureAnswered && result && (
+          <TruthPrompt c={c} prefill={result.count}
+            question="Quantos livros aparecem no resultado?"
+            onAnswer={(count) => answerCapture(captureItem, count)} />
+        )}
+        {captureItem && captureAnswered && answered && (
+          <Text style={{ color: c.ok, fontSize: 13 }}>
+            {answered.count === null ? 'Contagem real pulada.' : `Contagem real registrada: ${answered.count}.`}
+          </Text>
+        )}
+        {state === 'result' && result?.collectionSkipped === 'space' && (
+          <Text style={{ color: c.warn, fontSize: 13, lineHeight: 18 }}>
+            Captura não gravada na coleta: pouco espaço livre no aparelho.
+          </Text>
         )}
 
         {state === 'result' && result && (

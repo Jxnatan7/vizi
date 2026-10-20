@@ -1,4 +1,5 @@
 import CoreML
+import CryptoKit
 import Foundation
 
 /// Localiza e prepara os recursos embarcados pelo `resource_bundles` do podspec.
@@ -74,6 +75,31 @@ enum ModelAssets {
     try? FileManager.default.removeItem(at: cached)
     try FileManager.default.moveItem(at: compiled, to: cached)
     return (cached, true)
+  }
+
+  /// SHA-256 do arquivo de pesos (spec 007, R45).
+  ///
+  /// O do `.mlpackage` quando ele está no bundle — o mesmo arquivo que está em
+  /// `models/` no repositório, então `sha256sum` no Linux dá o mesmo número.
+  /// Senão, o do modelo compilado. `source` diz qual dos dois.
+  static func weightsDigest(compiled: URL) -> (sha256: String, source: String)? {
+    let inPackage = "Data/com.apple.CoreML/weights/weight.bin"
+    var candidates: [(URL, String)] = []
+    if let bundle = try? assetsBundle(),
+       let package = bundle.url(forResource: "vizi-seg", withExtension: "mlpackage") {
+      candidates.append((package.appendingPathComponent(inPackage), "mlpackage"))
+    }
+    if let package = Bundle.main.url(forResource: "vizi-seg", withExtension: "mlpackage") {
+      candidates.append((package.appendingPathComponent(inPackage), "mlpackage"))
+    }
+    candidates.append((compiled.appendingPathComponent("weights/weight.bin"), "mlmodelc"))
+
+    for (url, source) in candidates {
+      guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { continue }
+      let hex = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+      return (hex, source)
+    }
+    return nil
   }
 
   static func referenceImageURL(_ name: String = "reference") throws -> URL {

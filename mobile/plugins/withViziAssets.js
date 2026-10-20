@@ -3,8 +3,8 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * Copia o modelo e a imagem de referência para dentro do módulo nativo, onde o
- * CocoaPods consegue enxergá-los.
+ * Copia o modelo, a imagem de referência e o formato do zip da coleta para
+ * dentro do módulo nativo, onde o CocoaPods consegue enxergá-los.
  *
  * Por que isto existe: `resource_bundles` no podspec só resolve caminhos dentro
  * da raiz do pod. Apontar para `../../../models/` produz um bundle vazio — sem
@@ -16,6 +16,9 @@ const path = require('path');
 const ASSETS = [
   { from: 'models/vizi-seg.mlpackage', to: 'vizi-seg.mlpackage', dir: true },
   { from: 'assets/reference.jpg', to: 'reference.jpg', dir: false },
+  // O formato do zip da coleta (spec 007, R44). O contrato da spec É o arquivo
+  // que vai dentro de todo zip exportado: uma cópia só, que não diverge.
+  { from: 'specs/007-modo-coleta/contracts/zip-format.md', to: 'FORMAT.md', dir: false },
 ];
 
 module.exports = function withViziAssets(config) {

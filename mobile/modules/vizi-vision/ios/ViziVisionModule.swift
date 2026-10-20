@@ -111,6 +111,20 @@ struct SessionOptions: Record {
   @Field var band: BandPolicyRecord = BandPolicyRecord()
 }
 
+/// Política da coleta (spec 007). Vem do TypeScript — princípio IV.
+///
+/// **Defaults inválidos de propósito**, como os da faixa: o TypeScript sempre
+/// envia todos os campos. Se um dia deixar de enviar, a qualidade zero estraga
+/// as imagens à vista e o espaço infinito recusa a primeira marca — o defeito
+/// aparece na primeira sessão.
+struct CollectionOptionsRecord: Record {
+  @Field var minScore: Double = 0
+  @Field var minFreeBytes: Double = .infinity
+  @Field var jpegQuality: Double = 0
+  /// As políticas em vigor, gravadas sem interpretar.
+  @Field var policies: [String: Any] = [:]
+}
+
 /// Comportamento da faixa de interesse. Vira `BandPolicy`.
 ///
 /// **Defaults inválidos de propósito**, como os da T037 da 004: o TypeScript
@@ -155,14 +169,30 @@ public class ViziVisionModule: Module {
   /// guarda (spec 006, FR-011).
   private var resultEpoch = 0
 
+  /// A coleta (spec 007). Vive com o módulo: a sessão de coleta atravessa
+  /// sessões de câmera.
+  private let collection = CollectionRecorder()
+  /// A sessão de câmera rodando, para a telemetria de uma coleta aberta no
+  /// meio dela começar com contexto.
+  private var cameraInfo: [String: Any]?
+  /// Um quadro de marca parado na tela. Guardado pelo `keptLock`.
+  private var markFrozen = false
+
   public func definition() -> ModuleDefinition {
     Name("ViziVision")
 
     // Emitido a ~2 Hz. Um evento por frame seriam 60 travessias por segundo e
     // 60 re-renders — princípios II e III violados de uma vez.
     // `onBandChange` só em mudança discreta da faixa — nunca durante o
-    // arrasto (spec 005, princípio III).
-    Events("onTelemetry", "onBandChange")
+    // arrasto (spec 005, princípio III). `onCollectionChange` também: abrir,
+    // fechar, item gravado, resposta gravada (spec 007).
+    Events("onTelemetry", "onBandChange", "onCollectionChange")
+
+    OnCreate {
+      self.collection.onChange = { [weak self] state in
+        self?.sendEvent("onCollectionChange", state)
+      }
+    }
 
     Function("probe") { () -> [String: Any] in
       let info = ProcessInfo.processInfo
@@ -252,6 +282,8 @@ public class ViziVisionModule: Module {
       self.coordinator.engine = self.engine
       self.coordinator.onSample = { [weak self] sample in
         self?.sendEvent("onTelemetry", sample)
+        // Com a coleta aberta, a mesma amostra vira uma linha da sessão (R45).
+        self?.collection.appendTelemetry(sample)
       }
       // Configuração vai para o sink, não para a view: ela ainda não existe
       // neste instante, e só nasce quando o JSX reage ao retorno desta função.
@@ -275,6 +307,8 @@ public class ViziVisionModule: Module {
         $0.applyBand(animated: false)
         $0.setBandVisible(true, animated: false)
       }
+      self.cameraInfo = info
+      self.collection.cameraEvent("cameraStart", info: info)
       return info
     }
 
@@ -310,6 +344,14 @@ public class ViziVisionModule: Module {
       // anterior mesmo que falhe: salvar depois disso gravaria a foto errada.
       let imageId = UUID().uuidString
       let captureEpoch = self.dropResult()
+
+      // A coleta (spec 007) decide no toque, como a faixa. Sem espaço, a
+      // captura acontece igual e só não é gravada (FR-020). Nada do que ela
+      // guarda muda um valor calculado aqui, nem acontece antes do `readyMs`
+      // (FR-003): o rastro só junta referências, e a gravação vai para a fila
+      // da coleta depois do retorno montado.
+      let collecting = self.collection.isOpen
+      let recording = collecting && self.collection.hasSpace()
 
       // A faixa do instante do toque vale para a captura inteira: mexer nela
       // durante a foto não muda o que já foi decidido (spec 005). A faixa sai
@@ -395,11 +437,17 @@ public class ViziVisionModule: Module {
         /// releitura lê (spec 006). Guardado também no diagnóstico, que mostra
         /// outra coisa: a contagem não pode mudar com o modo (FR-010).
         var cutout: (buffer: CVPixelBuffer, books: CGRect)?
+        /// O que a coleta guarda da geometria (spec 007), com as chaves do
+        /// formato, preenchido onde cada valor nasce. Só leitura: nenhum
+        /// valor de cima muda por causa dele.
+        var traceGeometry: [String: Any] = [:]
+        var traceGravity: DeviceAttitude.Gravity?
 
         if let protos = result.protos {
           // A atitude é amostrada NO disparo, não depois: medir a inclinação
           // um instante mais tarde é medir outro momento.
           let gravity = self.coordinator.attitude.snapshot()
+          traceGravity = gravity
           let photoW = Double(CVPixelBufferGetWidth(shot.buffer))
           let photoH = Double(CVPixelBufferGetHeight(shot.buffer))
           let focal = Projective.Focal.from(
@@ -408,6 +456,7 @@ public class ViziVisionModule: Module {
             portraitWidth: min(photoW, photoH),
             portraitHeight: max(photoW, photoH),
             canonicalSide: Double(side))
+          traceGeometry["focal"] = ["x": focal.x, "y": focal.y]
 
           let estimate = ShelfGeometry.estimate(
             instances: instances,
@@ -418,6 +467,13 @@ public class ViziVisionModule: Module {
             minInstances: options.minInstancesForGeometry,
             minConfidence: options.minGeometryConfidence,
             tuning: ShelfGeometry.Tuning(options.geometry))
+
+          // Fileiras e deitados em âncoras, a chave das junções no zip (R38).
+          let anchor = { (i: Int) -> Int? in
+            instances.indices.contains(i) ? instances[i].anchorIndex : nil
+          }
+          traceGeometry["rows"] = estimate.rows.map { $0.indices.compactMap(anchor) }
+          traceGeometry["lying"] = estimate.lying.compactMap(anchor)
 
           declineReason = estimate.declineReason ?? ""
           shelfCount = estimate.rows.count
@@ -464,6 +520,7 @@ public class ViziVisionModule: Module {
               gravity: g,
               focal: Projective.Focal(x: fPortrait, y: fPortrait),
               center: CGPoint(x: portrait.extent.width / 2, y: portrait.extent.height / 2))
+            traceGeometry["horizon"] = CollectionTrace.homogeneous(horizonPortrait)
 
             // ── Horizontal: bases dos livros, PROJETADAS no horizonte ──────
             //
@@ -486,6 +543,7 @@ public class ViziVisionModule: Module {
                 azimuthConfidence = min(1, abs(vp.w) / scale * 1000)
               }
             }
+            traceGeometry["horizontalVP"] = CollectionTrace.homogeneous(horizontalVP)
 
             // A busca por gradientes fica só como diagnóstico: o teste no
             // aparelho mostrou que ela erra em cenas frontais.
@@ -505,6 +563,10 @@ public class ViziVisionModule: Module {
                let rendered = Rectify.render(out.image, context: self.ciContext) {
               straightened = out.fullyRectified
               cutout = (rendered, out.books)
+              traceGeometry["verticalVP"] = CollectionTrace.homogeneous(out.verticalVP)
+              traceGeometry["sourceQuad"] = out.sourceQuad.map { [Double($0.x), Double($0.y)] }
+              traceGeometry["books"] = CollectionTrace.rect(out.books)
+              traceGeometry["fullyRectified"] = out.fullyRectified
               // O motivo da estimativa vem antes do da retificação. "Poucos
               // livros" diz à pessoa o que fazer diferente; "sem ponto de
               // fuga" é só a consequência dele, e era o que aparecia.
@@ -675,10 +737,10 @@ public class ViziVisionModule: Module {
           PreviewSink.shared.view?.showDividers(dividers, imageSize: shown)
         }
 
-        return [
+        /// O que a tela recebe — e o que a coleta grava como `result`.
+        let shownResult: [String: Any] = [
           "count": reading.instances.count,
           "countSource": countSource,
-          "rereadMs": rereadMs,
           "straightened": straightened,
           "declineReason": declineReason,
           "geometryConfidence": confidence,
@@ -687,15 +749,58 @@ public class ViziVisionModule: Module {
           "shelfCount": reading.rowCount,
           "lyingCount": reading.lyingCount,
           "usedGravity": usedGravity,
-          "azimuthScores": azimuthScores,
-          "imageId": imageId,
-          "elapsedMs": shot.elapsedMs,
-          "readyMs": readyMs,
-          "photoWidth": CVPixelBufferGetWidth(shot.buffer),
-          "photoHeight": CVPixelBufferGetHeight(shot.buffer),
-          "instances": reading.instances.count,
           "outsideBandCount": outsideBandCount,
         ]
+
+        // ── A coleta (spec 007) ───────────────────────────────────────────
+        //
+        // O resultado já está montado; daqui só saem referências para a fila
+        // da coleta, que decodifica a 0,05, codifica e escreve em segundo
+        // plano (R38, R40). Nada aqui lança: um rastro torto não derruba a
+        // captura.
+        var itemId: String?
+        if recording {
+          var geometry: [String: Any] = [
+            "fieldOfViewDegrees": self.coordinator.fieldOfView,
+            "focal": NSNull(), "horizon": NSNull(), "verticalVP": NSNull(),
+            "horizontalVP": NSNull(), "sourceQuad": [Any](), "books": NSNull(),
+            "fullyRectified": false, "rows": [Any](), "lying": [Any](),
+            "azimuthScores": azimuthScores,
+          ]
+          for (key, value) in traceGeometry { geometry[key] = value }
+
+          let trace = CollectionTrace.Capture(
+            thresholds: self.currentThresholds(),
+            transform: self.coordinator.mode.rawValue,
+            side: side,
+            maskCoeffCount: self.engine.maskCoeffCount,
+            options: options.collectionDictionary,
+            photo: shot.buffer,
+            photoSquare: square,
+            photoRun: result,
+            band: bandAtTouch.band,
+            membership: membership,
+            gravity: traceGravity,
+            geometry: geometry,
+            crop: cutout?.buffer,
+            reread: countSource == "reread" ? reading.trace : nil,
+            result: shownResult,
+            timings: ["elapsedMs": shot.elapsedMs, "readyMs": readyMs, "rereadMs": rereadMs])
+          itemId = self.collection.record(capture: trace, prefill: reading.instances.count)
+        }
+
+        var response = shownResult
+        response["rereadMs"] = rereadMs
+        response["azimuthScores"] = azimuthScores
+        response["imageId"] = imageId
+        response["elapsedMs"] = shot.elapsedMs
+        response["readyMs"] = readyMs
+        response["photoWidth"] = CVPixelBufferGetWidth(shot.buffer)
+        response["photoHeight"] = CVPixelBufferGetHeight(shot.buffer)
+        response["instances"] = reading.instances.count
+        response["collectionItemId"] = itemId.map { $0 as Any } ?? NSNull()
+        response["collectionSkipped"] = collecting && !recording ? "space" as Any : NSNull()
+        return response
       } catch {
         PreviewSink.shared.onView {
           $0.result.teardown()
@@ -717,6 +822,8 @@ public class ViziVisionModule: Module {
       // o resultado. Sem view, descongela do mesmo jeito.
       let duration = self.transitionMs
       self.dropResult()
+      // A captura que esperava resposta fica sem ela (spec 007, R43).
+      self.collection.releaseAwaiting()
       DispatchQueue.main.async {
         // As divisões saem neste mesmo quadro: a transição reaparece por cima
         // delas, e depois dela vem a câmera ao vivo.
@@ -782,7 +889,114 @@ public class ViziVisionModule: Module {
       self.endResultState()
       let summary = self.coordinator.stop()
       self.coordinator.onSample = nil
+      self.collection.cameraEvent("cameraStop")
+      self.cameraInfo = nil
       return summary
+    }
+
+    // MARK: - Coleta (spec 007)
+
+    Function("getCollectionState") { () -> [String: Any] in
+      self.collection.state()
+    }
+
+    AsyncFunction("startCollection") { (options: CollectionOptionsRecord) -> [String: Any] in
+      // O modelo vai identificado no `session.json`: carregar antes, como a
+      // sessão de câmera faz.
+      if !self.engine.isLoaded { try self.engine.load() }
+      return try self.collection.start(
+        policy: CollectionRecorder.Policy(
+          minScore: Float(options.minScore),
+          minFreeBytes: options.minFreeBytes,
+          jpegQuality: options.jpegQuality),
+        policies: options.policies,
+        meta: self.collectionMeta(),
+        cameraInfo: self.coordinator.isRunning ? self.cameraInfo : nil)
+    }
+
+    AsyncFunction("stopCollection") { () -> [String: Any] in
+      self.collection.stop(reason: "stopped")
+    }
+
+    AsyncFunction("answerItem") { (itemId: String, count: Int?) in
+      try self.collection.answer(itemId, count: count)
+    }
+
+    AsyncFunction("listCollections") { () -> [[String: Any]] in
+      self.collection.list()
+    }
+
+    AsyncFunction("renameCollection") { (id: String, name: String) in
+      try self.collection.rename(id, name: name)
+    }
+
+    AsyncFunction("deleteCollection") { (id: String) in
+      try self.collection.delete(id)
+    }
+
+    // O zip sai pela fila da coleta; o menu, pela thread de interface. A
+    // promessa resolve quando o menu fecha (R44).
+    AsyncFunction("exportCollection") { (id: String) async throws -> [String: Any] in
+      let exported = try await self.collection.exportZip(id)
+      let shared = await self.share(exported)
+      return ["file": exported.relative, "bytes": exported.bytes, "shared": shared]
+    }
+
+    // Marcar (R37): o próximo quadro processado, com a tela parada nele.
+    AsyncFunction("markFrame") { () async throws -> [String: Any] in
+      guard self.collection.isOpen else { throw CollectionRecorder.RecorderError.closed }
+      guard self.coordinator.isRunning else { throw CollectionRecorder.RecorderError.camera }
+      // Congelado é captura em andamento, resultado ou outro quadro parado.
+      guard !PreviewSink.shared.frozen else { throw CollectionRecorder.RecorderError.busy }
+      guard self.collection.hasSpace() else { throw CollectionRecorder.RecorderError.space }
+
+      // A contagem que a tela mostrava no toque, e a faixa travada: mexer nela
+      // com o quadro parado mudaria o que aparece.
+      let displayed = await MainActor.run { () -> Int? in
+        let view = PreviewSink.shared.view
+        view?.setBandLocked(true)
+        return view?.bandRenderer.displayedCount
+      }
+
+      let frame: CollectionTrace.LiveFrame
+      do {
+        frame = try await self.coordinator.nextFrame()
+      } catch CollectionRecorder.RecorderError.busy {
+        // Outra marca já espera ou está parada: a faixa é dela, e continua
+        // travada.
+        throw CollectionRecorder.RecorderError.busy
+      } catch {
+        await MainActor.run { PreviewSink.shared.view?.setBandLocked(false) }
+        throw error
+      }
+      self.setMarkFrozen(true)
+      // O preview já mostra este quadrado: ele foi empurrado antes da
+      // inferência, e o congelamento veio logo depois dela, na mesma fila.
+      // Reenviar só garante.
+      PreviewSink.shared.showStill(frame.square)
+
+      let side = self.engine.inputWidth
+      let frameCount = frame.band.members(
+        of: frame.run.instances, imageSide: Float(side), membership: frame.membership).count
+      let mark = CollectionTrace.Mark(
+        frame: frame, displayedCount: displayed, frameCount: frameCount,
+        thresholds: self.currentThresholds(), transform: self.coordinator.mode.rawValue,
+        side: side, maskCoeffCount: self.engine.maskCoeffCount)
+      guard let itemId = self.collection.record(mark: mark, prefill: displayed ?? frameCount) else {
+        // A sessão fechou no meio do caminho.
+        self.resumeFromMark()
+        throw CollectionRecorder.RecorderError.closed
+      }
+      return [
+        "itemId": itemId,
+        "displayedCount": displayed.map { $0 as Any } ?? NSNull(),
+        "frameCount": frameCount,
+      ]
+    }
+
+    AsyncFunction("resumeLive") {
+      self.collection.releaseAwaiting()
+      self.resumeFromMark()
     }
 
     // Se a view sumir sem stopSession, a câmera continuaria ligada gastando
@@ -813,15 +1027,14 @@ public class ViziVisionModule: Module {
       confidenceThreshold: coordinator.confidenceThreshold,
       iouThreshold: coordinator.iouThreshold)
 
-    let inside = Reread.inside(
-      run.instances,
-      core: Reread.core(of: square.content, books: books),
-      membership: options.rereadMembership)
+    let core = Reread.core(of: square.content, books: books)
+    let inside = Reread.inside(run.instances, core: core, membership: options.rereadMembership)
 
     // Fileiras e deitados pela mesma `ShelfGeometry` da foto, sem gravidade:
     // numa imagem reta, o eixo médio das lombadas é a vertical (R33). Sem
     // gravidade, a focal não entra na conta.
     var rows: [ShelfGeometry.Row] = []
+    var lying: [Int] = []
     var lyingCount = 0
     if let protos = run.protos {
       let estimate = ShelfGeometry.estimate(
@@ -836,16 +1049,24 @@ public class ViziVisionModule: Module {
         minConfidence: options.minGeometryConfidence,
         tuning: ShelfGeometry.Tuning(options.geometry))
       rows = estimate.rows
+      lying = estimate.lying
       lyingCount = estimate.lying.count
     }
 
+    // Fileiras e deitados em âncoras, que é a chave das junções no zip (R38).
+    let anchor = { (i: Int) -> Int? in inside.indices.contains(i) ? inside[i].anchorIndex : nil }
     return Reread.Outcome(
       instances: inside,
       protos: run.protos,
       shelves: Reread.shelves(rows, of: inside, content: square.content,
                               edge: options.dividerEdgeMargin),
       rowCount: rows.count,
-      lyingCount: lyingCount)
+      lyingCount: lyingCount,
+      trace: CollectionTrace.RereadTrace(
+        square: square.buffer, content: square.content, core: core,
+        membership: options.rereadMembership, run: run,
+        rows: rows.map { $0.indices.compactMap(anchor) },
+        lying: lying.compactMap(anchor)))
   }
 
   // MARK: - Transição
@@ -924,6 +1145,10 @@ public class ViziVisionModule: Module {
     // Primeiro invalidar: o que a captura agendou deixa de valer antes de a
     // limpeza acontecer (spec 006, FR-011).
     dropResult()
+    // Um quadro de marca parado sai junto, e o item dele fica sem resposta
+    // (spec 007).
+    setMarkFrozen(false)
+    collection.releaseAwaiting()
     PreviewSink.shared.frozen = false
     // A sessão seguinte não herda as caixas do resultado.
     coordinator.results.clear()
@@ -931,6 +1156,76 @@ public class ViziVisionModule: Module {
     PreviewSink.shared.onView {
       $0.result.teardown()
       $0.clearDividers()
+      $0.setBandLocked(false)
+    }
+  }
+
+  // MARK: - Coleta (spec 007)
+
+  /// App, aparelho e modelo, para o `session.json` (R45).
+  private func collectionMeta() -> [String: Any] {
+    let info = Bundle.main.infoDictionary ?? [:]
+    var system = utsname()
+    uname(&system)
+    let machine = withUnsafeBytes(of: &system.machine) { raw in
+      String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
+    }
+    let os = ProcessInfo.processInfo.operatingSystemVersion
+    return [
+      "app": [
+        "version": info["CFBundleShortVersionString"] ?? NSNull(),
+        "build": info["CFBundleVersion"] ?? NSNull(),
+      ] as [String: Any],
+      "device": [
+        "model": machine,
+        "os": "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)",
+      ] as [String: Any],
+      "model": [
+        "identifier": "vizi-seg",
+        "inputWidth": engine.inputWidth,
+        "inputHeight": engine.inputHeight,
+        "weightsSha256": engine.weightsDigest.map { $0.sha256 as Any } ?? NSNull(),
+        "weightsSource": engine.weightsDigest.map { $0.source as Any } ?? NSNull(),
+        "metadata": engine.modelMetadata,
+      ] as [String: Any],
+    ]
+  }
+
+  /// Os limiares em vigor agora: os da sessão e o de aparência do overlay.
+  private func currentThresholds() -> CollectionTrace.Thresholds {
+    CollectionTrace.Thresholds(
+      confidence: coordinator.confidenceThreshold,
+      iou: coordinator.iouThreshold,
+      appearance: PreviewSink.shared.style.minConfidence)
+  }
+
+  /// O menu de compartilhar, a partir do controlador atual do Expo.
+  @MainActor
+  private func share(_ exported: CollectionRecorder.Exported) async -> Bool {
+    guard let presenter = appContext?.utilities?.currentViewController() else { return false }
+    return await CollectionExport.share(exported.zip, named: exported.shareName, from: presenter)
+  }
+
+  private func setMarkFrozen(_ value: Bool) {
+    keptLock.lock()
+    markFrozen = value
+    keptLock.unlock()
+  }
+
+  /// Solta o quadro parado de uma marca: esvazia o overlay antes de soltar a
+  /// pausa — as caixas do quadro ficariam sobre o ao vivo até o primeiro frame
+  /// novo, como na volta do resultado —, descongela e destrava a faixa.
+  private func resumeFromMark() {
+    keptLock.lock()
+    let wasFrozen = markFrozen
+    markFrozen = false
+    keptLock.unlock()
+    guard wasFrozen else { return }
+    DispatchQueue.main.async {
+      self.coordinator.results.clear()
+      self.coordinator.results.setPaused(false)
+      PreviewSink.shared.frozen = false
+      PreviewSink.shared.view?.setBandLocked(false)
     }
   }
 }
@@ -974,6 +1269,41 @@ private extension BandPolicy {
       springResponse: r.springResponse,
       springDamping: r.springDamping,
       haptics: r.haptics)
+  }
+}
+
+private extension CaptureOptions {
+  /// As opções como chegaram, para o `item.json` da coleta (spec 007, R45).
+  /// Campo a campo: o que a captura usou fica registrado com ela, porque muda
+  /// no meio de uma sessão — o diagnóstico, por exemplo.
+  var collectionDictionary: [String: Any] {
+    let g = geometry
+    let weights = { (w: ConfidenceWeightsRecord) -> [String: Any] in
+      ["count": w.count, "line": w.line, "spread": w.spread, "rows": w.rows]
+    }
+    return [
+      "cropMargin": cropMargin,
+      "minInstancesForGeometry": minInstancesForGeometry,
+      "minGeometryConfidence": minGeometryConfidence,
+      "approachMs": approachMs,
+      "transitionMs": transitionMs,
+      "diagnostics": diagnostics,
+      "geometry": [
+        "standingToleranceDegrees": g.standingToleranceDegrees,
+        "rowGapFactor": g.rowGapFactor,
+        "minRowGap": g.minRowGap,
+        "minBooksPerRow": g.minBooksPerRow,
+        "fullConfidenceCount": g.fullConfidenceCount,
+        "maxBaseResidual": g.maxBaseResidual,
+        "maxAngleSpread": g.maxAngleSpread,
+        "maxRowSlopeSpread": g.maxRowSlopeSpread,
+        "weightsWithGravity": weights(g.weightsWithGravity),
+        "weightsWithoutGravity": weights(g.weightsWithoutGravity),
+      ] as [String: Any],
+      "dividerEdgeMargin": dividerEdgeMargin,
+      "reread": reread,
+      "rereadMembership": rereadMembership,
+    ]
   }
 }
 
