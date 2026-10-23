@@ -10,10 +10,15 @@ import type { Palette } from './theme';
  *
  * Serve à captura e à marca. Some quando quem o mostra recebe a resposta.
  */
-export function TruthPrompt({ c, prefill, question, onAnswer }: {
+export function TruthPrompt({ c, prefill, appCount, question, onAnswer }: {
   c: Palette;
-  /** O que o pedido mostra ao abrir — a contagem do app. */
+  /** O que o pedido mostra ao abrir — a contagem do app, ou o inventário na prova. */
   prefill: number;
+  /**
+   * A contagem do app, quando o preenchido é outro número — o inventário da
+   * prateleira, na prova (spec 008, FR-009). Ausente, o preenchido é ela.
+   */
+  appCount?: number;
   question: string;
   /** `null` = pulou. */
   onAnswer: (count: number | null) => Promise<void>;
@@ -46,7 +51,10 @@ export function TruthPrompt({ c, prefill, question, onAnswer }: {
           disabled={sending} onPress={() => setCount((n) => n + 1)} />
       </View>
       <Text style={{ color: c.muted, fontSize: 12 }}>
-        {count === prefill ? `O app contou ${prefill}.` : `O app contou ${prefill} — diferença de ${count - prefill}.`}
+        {appCount === undefined
+          ? (count === prefill ? `O app contou ${prefill}.` : `O app contou ${prefill} — diferença de ${count - prefill}.`)
+          : `Inventário: ${prefill} · o app contou ${appCount}`
+            + (count === appCount ? '.' : ` — diferença de ${count - appCount}.`)}
       </Text>
       <View style={styles.actions}>
         <View style={styles.action}>

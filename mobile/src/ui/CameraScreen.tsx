@@ -2,14 +2,22 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
-import { PreviewView, type MarkReceipt, type TransformMode } from '../../modules/vizi-vision';
+import {
+  PreviewView, type CollectionSessionInfo, type CollectionTags, type MarkReceipt, type TransformMode,
+} from '../../modules/vizi-vision';
 import { useBand } from '../band/useBand';
 import { useCapture } from '../capture/useCapture';
 import { useSession } from '../camera/useSession';
+import {
+  EMPTY_SELECTION, describeTags, missingFor, tagsFor, type TagSelection,
+} from '../collection/selection';
+import { recordTrainingCapture, snapshot, useShelves } from '../collection/shelves';
 import { collectionMessage, useCollection } from '../collection/useCollection';
 import { copySessionToClipboard, evaluateGate } from '../telemetry/exportSession';
 import { BandControl } from './BandControl';
-import { CollectionIndicator } from './CollectionIndicator';
+import { CollectionIndicator, type CollectionNote } from './CollectionIndicator';
+import { CollectionStart, type CollectionKind } from './CollectionStart';
+import { CollectionTagsBar } from './CollectionTagsBar';
 import { Button, Card, Row } from './parts';
 import { colors } from './theme';
 import { TruthPrompt } from './TruthPrompt';
@@ -40,6 +48,28 @@ export default function CameraScreen() {
   const [answered, setAnswered] = useState<{ itemId: string; count: number | null } | null>(null);
   const [collectionError, setCollectionError] = useState<string | null>(null);
 
+  // Treino e prova (spec 008). A escolha da câmera persiste entre capturas e é
+  // esquecida quando a sessão fecha (data-model). `captureTags` é a escolha com
+  // que a captura na tela foi feita: a pergunta da prova é dela, não da atual.
+  const shelves = useShelves();
+  const [choosing, setChoosing] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [selection, setSelection] = useState<TagSelection>(EMPTY_SELECTION);
+  const [captureTags, setCaptureTags] = useState<CollectionTags | null>(null);
+  const [note, setNote] = useState<CollectionNote | null>(null);
+  const purpose = collection.state.open ? collection.state.purpose ?? null : null;
+  const light = collection.state.open ? collection.state.light ?? null : null;
+  const tags = tagsFor(selection, shelves.store, purpose);
+  const missing = missingFor(tags, purpose);
+
+  // Uma sessão nova começa sem escolha: começar com a de ontem gravaria a
+  // prateleira errada sem ninguém ver.
+  const sessionId = collection.state.open ? collection.state.id : undefined;
+  useEffect(() => {
+    setSelection(EMPTY_SELECTION);
+    setNote(null);
+  }, [sessionId]);
+
   // A sessão parou com o resultado na tela: o nativo já o desfez. Um quadro de
   // marca parado também: o item dele fica sem resposta.
   useEffect(() => {
@@ -49,21 +79,71 @@ export default function CameraScreen() {
     }
   }, [info, reset]);
 
+  /** Desligar fecha; ligar pergunta antes que sessão é esta (FR-001). */
   const toggleCollection = async () => {
     setCollectionError(null);
+    if (!collection.state.open) {
+      setChoosing(true);
+      return;
+    }
     try {
-      if (collection.state.open) await collection.stop();
-      else await collection.start();
+      await collection.stop();
     } catch (e) {
       setCollectionError(collectionMessage(e));
     }
+  };
+
+  const startCollection = async (kind: CollectionKind) => {
+    setCollectionError(null);
+    setStarting(true);
+    try {
+      // As prateleiras de agora vão com a sessão: é contra elas que o relatório
+      // da prova diz quais ficaram sem captura.
+      const list = (shelves.store?.shelves ?? []).map(snapshot);
+      const session: CollectionSessionInfo = kind.purpose === 'exam'
+        ? { purpose: 'exam', light: null, shelves: list }
+        : { purpose: 'training', light: kind.light ?? 'day', shelves: list };
+      await collection.start(session);
+      setChoosing(false);
+    } catch (e) {
+      setCollectionError(collectionMessage(e));
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  /**
+   * No treino, o modo rápido: grava e volta, e a nota diz o que foi gravado
+   * (FR-005, FR-006). Fora dele, a captura de sempre, com a escolha junto.
+   */
+  const onCapture = async () => {
+    setNote(null);
+    if (purpose === 'training' && tags) {
+      const r = await capture({ tags, fast: true });
+      if (!r) {
+        setNote({ text: 'A captura falhou — nada foi gravado.', bad: true });
+      } else if (r.collectionItemId) {
+        setNote({ text: `${r.collectionItemId} gravada · ${describeTags(tags)}`, bad: false });
+        if (light) void shelves.run(() => recordTrainingCapture(tags, light));
+      } else {
+        setNote({
+          text: r.collectionSkipped === 'space'
+            ? 'Não gravada: pouco espaço livre no aparelho.'
+            : 'Não gravada: o modo coleta não estava aberto.',
+          bad: true,
+        });
+      }
+      return;
+    }
+    setCaptureTags(tags);
+    await capture({ tags });
   };
 
   const markFrame = async () => {
     setCollectionError(null);
     setMarking(true);
     try {
-      setMarked(await collection.mark());
+      setMarked(await collection.mark(tags));
     } catch (e) {
       setCollectionError(collectionMessage(e));
     } finally {
@@ -124,14 +204,14 @@ export default function CameraScreen() {
           <BandControl c={c} mode={band?.mode} visible={state === 'live' && !marked}
             onChange={setBandMode} />
           {/* Fixo como o visor: gravando é algo que se vê enquanto se aponta. */}
-          {collection.state.open && <CollectionIndicator c={c} state={collection.state} />}
+          {collection.state.open && <CollectionIndicator c={c} state={collection.state} note={note} />}
         </View>
       )}
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={[styles.eyebrow, { color: c.muted }]}>MARCO 2 · CÂMERA</Text>
         <Text style={[styles.title, { color: c.ink }]}>vizi</Text>
 
-        {!info && collection.state.open && <CollectionIndicator c={c} state={collection.state} />}
+        {!info && collection.state.open && <CollectionIndicator c={c} state={collection.state} note={note} />}
 
         {collectionError && (
           <Card c={c} border={c.crit} label="MODO COLETA">
@@ -203,8 +283,17 @@ export default function CameraScreen() {
 
         {info && state !== 'result' && !marked && (
           <>
-            <Button c={c} onPress={capture} disabled={state === 'capturing' || marking}
+            {purpose && (
+              <CollectionTagsBar c={c} purpose={purpose} light={light}
+                store={shelves.store} storeError={shelves.error}
+                selection={selection} onChange={setSelection} />
+            )}
+            <Button c={c} onPress={() => void onCapture()}
+              disabled={state === 'capturing' || marking || missing !== null}
               title={state === 'capturing' ? 'Capturando…' : 'Capturar'} />
+            {missing && (
+              <Text style={{ color: c.warn, fontSize: 13, lineHeight: 18 }}>{missing}</Text>
+            )}
             {/* Só ao vivo (FR-010): na captura e no resultado, não há quadro a marcar. */}
             {collection.state.open && (
               <Button c={c} onPress={() => void markFrame()}
@@ -226,7 +315,12 @@ export default function CameraScreen() {
 
         {/* O modo coleta (spec 007). Liga com ou sem câmera; some enquanto um
             pedido de contagem real está aberto, que a sessão precisa receber. */}
-        {!marked && state !== 'capturing' && !(captureItem && !captureAnswered) && (
+        {choosing && !collection.state.open && (
+          <CollectionStart c={c} busy={starting}
+            onChoose={(kind) => void startCollection(kind)}
+            onCancel={() => setChoosing(false)} />
+        )}
+        {!choosing && !marked && state !== 'capturing' && !(captureItem && !captureAnswered) && (
           <Pressable
             onPress={() => void toggleCollection()}
             accessibilityRole="switch"
@@ -243,10 +337,17 @@ export default function CameraScreen() {
 
         {/* A contagem real da captura, antes do cartão: é o que a coleta pede
             agora (FR-007). */}
+        {/* Na prova, o gabarito é o inventário da prateleira (FR-009). */}
         {captureItem && !captureAnswered && result && (
-          <TruthPrompt c={c} prefill={result.count}
-            question="Quantos livros aparecem no resultado?"
-            onAnswer={(count) => answerCapture(captureItem, count)} />
+          purpose === 'exam' && captureTags?.shelf ? (
+            <TruthPrompt c={c} prefill={captureTags.shelf.count} appCount={result.count}
+              question={`Quantos livros de "${captureTags.shelf.name}" aparecem no resultado? Se algum ficou cortado, pule e capture de novo.`}
+              onAnswer={(count) => answerCapture(captureItem, count)} />
+          ) : (
+            <TruthPrompt c={c} prefill={result.count}
+              question="Quantos livros aparecem no resultado?"
+              onAnswer={(count) => answerCapture(captureItem, count)} />
+          )
         )}
         {captureItem && captureAnswered && answered && (
           <Text style={{ color: c.ok, fontSize: 13 }}>

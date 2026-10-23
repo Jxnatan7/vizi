@@ -123,6 +123,9 @@ struct CollectionOptionsRecord: Record {
   @Field var jpegQuality: Double = 0
   /// As políticas em vigor, gravadas sem interpretar.
   @Field var policies: [String: Any] = [:]
+  /// O que a sessão é — tipo, luz, prateleiras (spec 008, R47). Também sem
+  /// interpretar: quem sabe o que é uma prateleira é o TypeScript.
+  @Field var session: [String: Any] = [:]
 }
 
 /// Comportamento da faixa de interesse. Vira `BandPolicy`.
@@ -336,7 +339,9 @@ public class ViziVisionModule: Module {
 
     // MARK: - Captura (marco 4)
 
-    AsyncFunction("capture") { (options: CaptureOptions) -> [String: Any] in
+    // `tags` é a escolha da câmera no toque (spec 008, R47): argumento, e não
+    // estado guardado aqui, para o item gravar exatamente o que valia no toque.
+    AsyncFunction("capture") { (options: CaptureOptions, tags: [String: Any]?) -> [String: Any] in
       let touchedAt = CFAbsoluteTimeGetCurrent()
       self.transitionMs = options.transitionMs
 
@@ -785,7 +790,8 @@ public class ViziVisionModule: Module {
             crop: cutout?.buffer,
             reread: countSource == "reread" ? reading.trace : nil,
             result: shownResult,
-            timings: ["elapsedMs": shot.elapsedMs, "readyMs": readyMs, "rereadMs": rereadMs])
+            timings: ["elapsedMs": shot.elapsedMs, "readyMs": readyMs, "rereadMs": rereadMs],
+            tags: tags)
           itemId = self.collection.record(capture: trace, prefill: reading.instances.count)
         }
 
@@ -904,13 +910,19 @@ public class ViziVisionModule: Module {
       // O modelo vai identificado no `session.json`: carregar antes, como a
       // sessão de câmera faz.
       if !self.engine.isLoaded { try self.engine.load() }
+      // O que a sessão é vai para o topo do `session.json`, ao lado do app e do
+      // modelo (spec 008). Só estas chaves: o resto do topo é do formato.
+      var meta = self.collectionMeta()
+      for key in CollectionRecorder.sessionKeys {
+        meta[key] = options.session[key] ?? NSNull()
+      }
       return try self.collection.start(
         policy: CollectionRecorder.Policy(
           minScore: Float(options.minScore),
           minFreeBytes: options.minFreeBytes,
           jpegQuality: options.jpegQuality),
         policies: options.policies,
-        meta: self.collectionMeta(),
+        meta: meta,
         cameraInfo: self.coordinator.isRunning ? self.cameraInfo : nil)
     }
 
@@ -943,7 +955,7 @@ public class ViziVisionModule: Module {
     }
 
     // Marcar (R37): o próximo quadro processado, com a tela parada nele.
-    AsyncFunction("markFrame") { () async throws -> [String: Any] in
+    AsyncFunction("markFrame") { (tags: [String: Any]?) async throws -> [String: Any] in
       guard self.collection.isOpen else { throw CollectionRecorder.RecorderError.closed }
       guard self.coordinator.isRunning else { throw CollectionRecorder.RecorderError.camera }
       // Congelado é captura em andamento, resultado ou outro quadro parado.
@@ -981,7 +993,7 @@ public class ViziVisionModule: Module {
       let mark = CollectionTrace.Mark(
         frame: frame, displayedCount: displayed, frameCount: frameCount,
         thresholds: self.currentThresholds(), transform: self.coordinator.mode.rawValue,
-        side: side, maskCoeffCount: self.engine.maskCoeffCount)
+        side: side, maskCoeffCount: self.engine.maskCoeffCount, tags: tags)
       guard let itemId = self.collection.record(mark: mark, prefill: displayed ?? frameCount) else {
         // A sessão fechou no meio do caminho.
         self.resumeFromMark()

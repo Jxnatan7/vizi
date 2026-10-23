@@ -431,6 +431,46 @@ export type CollectionOptions = {
    * estão. O nativo grava sem interpretar.
    */
   policies: Record<string, unknown>;
+  /** O que a sessão é (spec 008). Vai para o topo do `session.json` como está. */
+  session: CollectionSessionInfo;
+};
+
+// ---------------------------------------------------------------------------
+// Spec 008 — coleta para treino e prova
+// ---------------------------------------------------------------------------
+
+/** Treino — fotos para o Roboflow — ou prova, que nunca entra no treino. */
+export type CollectionPurpose = 'training' | 'exam';
+
+export type CollectionLight = 'day' | 'night';
+
+export type ShelfDistance = 'near' | 'mid' | 'far';
+
+export type ShelfAngle = 'left' | 'front' | 'right';
+
+/** Uma prateleira como estava no instante: o número do inventário muda com o tempo. */
+export type ShelfSnapshot = { id: string; name: string; count: number };
+
+/**
+ * O que a sessão é. No treino, a luz escolhida ao ligar; na prova, nenhuma.
+ * As prateleiras cadastradas ao abrir vão junto: é contra elas que o relatório
+ * da prova diz quais ficaram sem captura.
+ */
+export type CollectionSessionInfo =
+  | { purpose: 'training'; light: CollectionLight; shelves: ShelfSnapshot[] }
+  | { purpose: 'exam'; light: null; shelves: ShelfSnapshot[] };
+
+/**
+ * A escolha na câmera no instante do toque. Viaja como argumento da captura e
+ * da marca, e o nativo a grava em `item.json` como `tags`, sem interpretar.
+ */
+export type CollectionTags = {
+  shelf: ShelfSnapshot | null;
+  /** Foto sem livros: sem prateleira, sem distância e sem ângulo. */
+  background: boolean;
+  /** Só no treino, com prateleira. */
+  distance: ShelfDistance | null;
+  angle: ShelfAngle | null;
 };
 
 /** O que o nativo diz da coleta. Espelhado pelo `onCollectionChange`. */
@@ -439,6 +479,9 @@ export type CollectionState = {
   /** Ausentes com a coleta fechada. */
   id?: string;
   startedAt?: number;
+  /** O tipo da sessão aberta; `null` numa aberta antes da spec 008. */
+  purpose?: CollectionPurpose | null;
+  light?: CollectionLight | null;
   marks: number;
   captures: number;
   answered: number;
@@ -467,6 +510,9 @@ export type CollectionSummary = {
   /** A aberta aparece na lista, sem exportar. */
   open: boolean;
   endReason: 'stopped' | 'background' | 'recovered' | null;
+  /** `null` nas sessões gravadas antes da spec 008. */
+  purpose: CollectionPurpose | null;
+  light: CollectionLight | null;
   marks: number;
   captures: number;
   answered: number;

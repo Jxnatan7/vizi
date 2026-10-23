@@ -49,8 +49,11 @@ O que existe hoje, spec a spec:
   endireitado, lido por último pelo modelo, com as caixas sobre ele.
 - **Modo coleta.** Grava capturas e quadros marcados com a contagem real ao
   lado, e exporta tudo num zip — o gabarito para medir e retreinar o modelo.
+- **Treino e prova.** Sessões de treino viram, no Linux, uma pasta para o
+  Roboflow com os contornos prontos; sessões de prova medem o app contra o
+  inventário de cada prateleira.
 
-As quatro últimas têm o código completo e ainda fecham portões no aparelho. O
+As cinco últimas têm o código completo e ainda fecham portões no aparelho. O
 estado de cada spec, com as medições, está em [mobile/README.md](mobile/README.md).
 
 Tudo sai do Linux, sem Mac: o GitHub Actions compila, e a assinatura e a

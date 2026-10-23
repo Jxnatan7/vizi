@@ -35,6 +35,6 @@ models/*.mlmodelc/
 # Gerado pelo config plugin withViziAssets a cada prebuild
 modules/vizi-vision/ios/Resources/
 
-# Python — o script de checagem do zip da coleta (spec 007)
+# Python — o verificador do zip (spec 007) e tools/coleta.py (spec 008)
 __pycache__/
 *.pyc

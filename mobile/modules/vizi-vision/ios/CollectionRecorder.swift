@@ -93,6 +93,10 @@ final class CollectionRecorder {
     documents.appendingPathComponent("collection", isDirectory: true)
   }
 
+  /// O que a sessão é (spec 008): no topo do `session.json`, como o TypeScript
+  /// enviou. `purpose` e `light` voltam no estado e na lista.
+  static let sessionKeys = ["purpose", "light", "shelves"]
+
   init() {
     // Antes de qualquer outra coisa na fila: o que um encerramento forçado
     // deixou para trás (R41).
@@ -427,6 +431,8 @@ final class CollectionRecorder {
     if let current {
       s["id"] = current.id
       s["startedAt"] = Self.ms(current.startedAt)
+      s["purpose"] = current.manifest["purpose"] ?? NSNull()
+      s["light"] = current.manifest["light"] ?? NSNull()
     }
     if let lastError { s["lastError"] = lastError }
     return s
@@ -448,6 +454,7 @@ final class CollectionRecorder {
         "id": $0.id, "name": NSNull(), "startedAt": Self.ms($0.startedAt), "endedAt": NSNull(),
         "open": true, "endReason": NSNull(), "marks": $0.marks, "captures": $0.captures,
         "answered": $0.answered, "bytes": $0.bytes, "exportedAt": NSNull(),
+        "purpose": $0.manifest["purpose"] ?? NSNull(), "light": $0.manifest["light"] ?? NSNull(),
       ]
     }
     lock.unlock()
@@ -472,6 +479,9 @@ final class CollectionRecorder {
         "answered": counts["answered"] ?? 0,
         "bytes": m["bytes"] ?? 0,
         "exportedAt": export?["at"] ?? NSNull(),
+        // Ausentes nas sessões anteriores à spec 008.
+        "purpose": m["purpose"] ?? NSNull(),
+        "light": m["light"] ?? NSNull(),
       ])
     }
     return out.sorted {

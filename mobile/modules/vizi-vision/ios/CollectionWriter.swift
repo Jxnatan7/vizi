@@ -49,20 +49,23 @@ enum CollectionWriter {
   ///   alta — a mesma regra do `FrameTransform`, que a leva ao retrato com
   ///   `.oriented(.right)`. A imagem sai em retrato **nos próprios pixels**,
   ///   sem EXIF de orientação, que nem todo leitor respeita.
+  /// - Parameter overBlack: compõe sobre preto antes de codificar. O JPEG não
+  ///   tem alfa, e o ImageIO achata o transparente em branco (spec 008, R50).
   static func writeJPEG(
     _ buffer: CVPixelBuffer, named name: String, in folder: URL,
-    quality: Double, upright: Bool
+    quality: Double, upright: Bool, overBlack: Bool = false
   ) throws -> Written {
     var source = buffer
     if upright, CVPixelBufferGetWidth(buffer) > CVPixelBufferGetHeight(buffer) {
       source = try rotatedClockwise(buffer)
     }
 
-    var image: CGImage?
-    let status = VTCreateCGImageFromCVPixelBuffer(source, options: nil, imageOut: &image)
-    guard status == noErr, let image else {
+    var created: CGImage?
+    let status = VTCreateCGImageFromCVPixelBuffer(source, options: nil, imageOut: &created)
+    guard status == noErr, let created else {
       throw WriteError.image("\(name): VideoToolbox \(status)")
     }
+    let image = try overBlack ? composedOverBlack(created, name: name) : created
 
     let url = folder.appendingPathComponent(name)
     guard let destination = CGImageDestinationCreateWithURL(
@@ -75,6 +78,33 @@ enum CollectionWriter {
       throw WriteError.image("\(name): o aparelho pode estar sem espaço")
     }
     return Written(file: name, width: image.width, height: image.height, bytes: size(of: url))
+  }
+
+  /// A imagem sobre preto opaco, no mesmo espaço de cor: os pixels opacos
+  /// saem iguais, e o transparente vira preto. Desenhar com o Core Graphics
+  /// respeita o alfa como ele vier, pré-multiplicado ou não.
+  private static func composedOverBlack(_ image: CGImage, name: String) throws -> CGImage {
+    switch image.alphaInfo {
+    case .none, .noneSkipFirst, .noneSkipLast: return image
+    default: break
+    }
+    let space = image.colorSpace.flatMap { $0.supportsOutput ? $0 : nil }
+      ?? CGColorSpaceCreateDeviceRGB()
+    guard let context = CGContext(
+      data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0,
+      space: space,
+      bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+    else {
+      throw WriteError.image("\(name): contexto para compor sobre preto")
+    }
+    let bounds = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+    context.setFillColor(red: 0, green: 0, blue: 0, alpha: 1)
+    context.fill(bounds)
+    context.draw(image, in: bounds)
+    guard let composed = context.makeImage() else {
+      throw WriteError.image("\(name): compor sobre preto")
+    }
+    return composed
   }
 
   /// 90° no sentido horário, com o vImage.

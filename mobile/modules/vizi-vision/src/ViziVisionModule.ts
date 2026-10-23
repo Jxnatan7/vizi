@@ -5,6 +5,7 @@ import type {
   CaptureOptions, CaptureResult, OverlayStyle, SavedImage, SaveResultOptions,
   Session, SessionInfo, SessionOptions, TelemetrySample, TransformMode,
   CollectionOptions, CollectionState, CollectionSummary, ExportOutcome, MarkReceipt,
+  CollectionTags,
 } from './ViziVision.types';
 
 type Events = {
@@ -36,7 +37,11 @@ declare class ViziVisionModule extends NativeModule<Events> {
   setTransform(transform: TransformMode): Promise<void>;
   setOverlayStyle(style: OverlayStyle): Promise<void>;
 
-  capture(options: CaptureOptions): Promise<CaptureResult>;
+  /**
+   * `tags` é a escolha da câmera no toque (spec 008), gravada no item da coleta
+   * como chegou. Sempre enviado — `null` sem escolha ou sem coleta.
+   */
+  capture(options: CaptureOptions, tags: CollectionTags | null): Promise<CaptureResult>;
   dismissResult(): Promise<void>;
   /** Grava o resultado que está na tela. O índice é do TypeScript. */
   saveResult(options: SaveResultOptions): Promise<SavedImage>;
@@ -53,8 +58,8 @@ declare class ViziVisionModule extends NativeModule<Events> {
   stopCollection(): Promise<CollectionState>;
   /** Síncrona: a tela monta sabendo se a coleta está aberta. */
   getCollectionState(): CollectionState;
-  /** Grava o próximo quadro processado e congela a tela nele. */
-  markFrame(): Promise<MarkReceipt>;
+  /** Grava o próximo quadro processado e congela a tela nele, com a escolha do toque. */
+  markFrame(tags: CollectionTags | null): Promise<MarkReceipt>;
   /** A contagem real do item que espera resposta; `null` = pulou. */
   answerItem(itemId: string, count: number | null): Promise<void>;
   /** Solta o quadro parado de uma marca e volta ao ao vivo. */

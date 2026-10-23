@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 
 import {
   ViziVision,
+  type CollectionSessionInfo,
   type CollectionState,
   type CollectionSummary,
+  type CollectionTags,
   type ExportOutcome,
   type MarkReceipt,
 } from '../../modules/vizi-vision';
@@ -52,10 +54,14 @@ export function useCollection() {
     return () => sub.remove();
   }, []);
 
-  /** Abre a sessão com as políticas em vigor, que vão para o registro como estão. */
-  const start = useCallback(async () => {
+  /**
+   * Abre a sessão com as políticas em vigor, que vão para o registro como
+   * estão, e o que ela é — treino com a luz, ou prova (spec 008).
+   */
+  const start = useCallback(async (session: CollectionSessionInfo) => {
     setState(await ViziVision.startCollection({
       ...DEFAULT_COLLECTION,
+      session,
       policies: {
         session: DEFAULT_SESSION,
         capture: DEFAULT_CAPTURE,
@@ -76,8 +82,11 @@ export function useCollection() {
     [],
   );
 
-  /** Resolve com o quadro já parado na tela. */
-  const mark = useCallback((): Promise<MarkReceipt> => ViziVision.markFrame(), []);
+  /** Resolve com o quadro já parado na tela. `tags`: a escolha da câmera no toque. */
+  const mark = useCallback(
+    (tags: CollectionTags | null): Promise<MarkReceipt> => ViziVision.markFrame(tags),
+    [],
+  );
 
   const resume = useCallback(() => ViziVision.resumeLive(), []);
 

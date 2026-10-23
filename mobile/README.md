@@ -13,6 +13,7 @@ App React Native + Expo de detecção e segmentação em tempo real, on-device.
 | **005 · Faixa de interesse** | 🟡 código completo, faltam dois portões no aparelho | 41 de 44 |
 | **006 · Releitura do recorte** | 🟡 código completo, sem build, falta o aparelho | 20 de 26 |
 | **007 · Modo coleta** | 🟡 código completo, sem build, falta o aparelho | 34 de 41 |
+| **008 · Coleta para treino e prova** | 🟡 código completo, sem build, falta o aparelho | 27 de 33 |
 | Acabamento e adaptação | — | |
 | Android | — | |
 
@@ -20,8 +21,8 @@ A sequência se afastou da tabela de marcos da constituição, e cada desvio foi
 registrado na spec que o fez. As máscaras (antigo marco 5) entraram na 003. Os
 três relógios (antigo marco 4) foram descartados em 16/09: a 60 fps não sobra
 intervalo entre detecções para disfarçar. A 004, a 005 e a 006 são marcos de
-produto, e não estavam na tabela. A 007 é ferramenta: existe para medir e
-retreinar o modelo.
+produto, e não estavam na tabela. A 007 e a 008 são ferramenta: existem para
+medir e retreinar o modelo.
 
 ### Marco 1 — a inferência cabe, com folga de uma ordem de grandeza
 
@@ -172,6 +173,43 @@ que ele viu e o que concluiu, com a contagem real ao lado.
 
 **Escrita em 19/10, ainda sem build.**
 
+### Treino e prova — o caminho para o gate
+
+O gate do projeto é contar com exatidão todos os livros da casa. As coletas de
+20/10 mostraram que o modelo só conta a mais, e erra no que nunca viu: livros
+grandes de perto, a madeira da casa, o estojo. A 008 deixa o modo coleta pronto
+para treinar com fotos da casa e medir numa prova que nunca entra no treino.
+
+- **Treino ou prova.** Ligar o modo pergunta o tipo da sessão e, no treino, a
+  luz. A prova nunca vira pacote para o Roboflow.
+- **Prateleiras e guia.** Na Medição, cada prateleira tem o número do
+  inventário, contado pela [regra de contagem](models/regra-de-contagem.md).
+  Na câmera, um guia 3×3 de distância e ângulo marca as variações que já têm
+  foto, e sobrevive às sessões apagadas.
+- **Modo rápido.** No treino, a captura é gravada e a câmera volta direto, sem
+  resultado e sem pergunta.
+- **A prova com gabarito.** A pergunta vem preenchida com o inventário da
+  prateleira escolhida.
+- **O pacote vê o que o modelo vê.** [`tools/coleta.py`](tools/coleta.py)
+  transforma sessões de treino numa pasta para o Roboflow: o recorte encaixado
+  num quadrado com preto em volta, como a releitura o lê, e a foto inteira em
+  uma de cada três capturas, com o contorno de cada livro que o app achou, sem
+  duplicatas e redesenhado pelo SAM — a máscara do app é grosseira no topo dos
+  livros. Cada imagem é conferida contra o quadrado que o modelo leu.
+- **Um conserto da 007.** Onde o recorte endireitado sai da foto, o `crop.jpg`
+  gravava a região em branco, e a releitura a vê preta. Agora sai preta, e o
+  pacote refaz a das sessões antigas pela geometria.
+
+```bash
+uv run tools/coleta.py pacote <zip>… --saida <pasta> --so-imagens   # o Roboflow marca
+uv run tools/coleta.py pacote <zip>… --saida <pasta> [--previa <pasta>]   # contornos prontos
+uv run tools/coleta.py prova <zip>…
+```
+
+**Escrita em 22/10, ainda sem build.** A ferramenta já roda nas sessões de
+20/10: 12 recortes e 4 fotos, nenhuma imagem recusada na conferência, em 2,5
+min com o SAM na CPU (`--sem-sam` para o contorno do app, em segundos).
+
 ### O que a medição mudou na arquitetura
 
 A premissa era inferência em ≤ 25 ms, e o desenho dos
@@ -280,7 +318,8 @@ src/ui/                 telas
 src/camera/             sessão de câmera e sua política
 src/capture/            captura e sua política — inclusive a da geometria
 src/band/               política da faixa de interesse e o espelho do estado nativo
-src/collection/         política do modo coleta e o espelho do estado nativo
+src/collection/         política do modo coleta, prateleiras e guia, e o espelho
+                        do estado nativo
 src/history/            índice do histórico
 src/overlay/            aparência do overlay
 src/telemetry/          exportação e portão da sessão
@@ -288,8 +327,9 @@ src/bench/              medição controlada do marco 1
 modules/vizi-vision/    Expo Module nativo — câmera, Core ML, overlay,
                         captura, retificação, transição, faixa de interesse,
                         coleta
-models/                 .mlpackage + shapes verificados
+models/                 .mlpackage + shapes verificados + a regra de contagem
 plugins/                config plugins
+tools/                  coleta.py — o pacote para o Roboflow e o relatório da prova
 ```
 
 Limiares, estilo e tempos vêm de `src/`; o Swift executa (princípio IV).

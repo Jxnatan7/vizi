@@ -1,6 +1,9 @@
 import { useCallback, useState } from 'react';
 
-import { ViziVision, type CaptureResult, type HistoryEntry } from '../../modules/vizi-vision';
+import {
+  ViziVision, type CaptureResult, type CollectionTags, type HistoryEntry,
+} from '../../modules/vizi-vision';
+import { FAST_CAPTURE } from '../collection/policy';
 import { saveResult } from '../history/store';
 
 import { DEFAULT_CAPTURE } from './options';
@@ -17,7 +20,18 @@ export function useCapture() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const capture = useCallback(async () => {
+  /**
+   * `tags` é a escolha da câmera, que a coleta grava com o item (spec 008).
+   *
+   * `fast` é o modo rápido do treino (R48): sem aproximação, sem
+   * endireitamento e sem diagnóstico, e a câmera volta assim que o resultado
+   * chega — ele nunca vira o estado `'result'`. A captura roda inteira e é
+   * gravada igual. Resolve com o resultado, para quem chamou anotar o item; com
+   * `null` quando a captura falhou.
+   */
+  const capture = useCallback(async (
+    { tags = null, fast = false }: { tags?: CollectionTags | null; fast?: boolean } = {},
+  ): Promise<CaptureResult | null> => {
     setError(null);
     setSaved(null);
     setSaveError(null);
@@ -25,13 +39,23 @@ export function useCapture() {
     // alguns décimos de segundo e a tela não pode ficar sem resposta.
     setState('capturing');
     try {
-      const r = await ViziVision.capture({ ...DEFAULT_CAPTURE, diagnostics });
+      const options = fast
+        ? { ...DEFAULT_CAPTURE, ...FAST_CAPTURE, diagnostics: false }
+        : { ...DEFAULT_CAPTURE, diagnostics };
+      const r = await ViziVision.capture(options, tags);
+      if (fast) {
+        await ViziVision.dismissResult();
+        setState('live');
+        return r;
+      }
       setResult(r);
       setCapturedAt(Date.now());
       setState('result');
+      return r;
     } catch (e) {
       setError(String(e));
       setState('live');
+      return null;
     }
   }, [diagnostics]);
 

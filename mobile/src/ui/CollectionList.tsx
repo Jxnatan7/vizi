@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { CollectionSummary } from '../../modules/vizi-vision';
+import { LIGHTS } from '../collection/policy';
 import { collectionMessage, useCollectionSessions } from '../collection/useCollection';
 import { formatDate, formatMegabytes } from './format';
 import { Card } from './parts';
@@ -83,7 +84,7 @@ export function CollectionList({ c }: { c: Palette }) {
         <View key={session.id} style={[styles.session, { borderColor: c.line }]}>
           <Text style={[styles.name, { color: c.ink }]}>{title(session)}</Text>
           <Text style={{ color: c.muted, fontSize: 12, lineHeight: 17 }}>
-            {formatDate(session.startedAt)}
+            {kind(session)}{' · '}{formatDate(session.startedAt)}
             {' · '}{session.marks} marcas · {session.captures} capturas
             {' · '}{session.answered} respondidas · {formatMegabytes(session.bytes)}
             {session.endReason === 'background' ? ' · fechada no segundo plano' : ''}
@@ -133,6 +134,15 @@ export function CollectionList({ c }: { c: Palette }) {
       )}
     </Card>
   );
+}
+
+/** Treino ou prova (spec 008). As sessões anteriores não têm tipo. */
+function kind(session: CollectionSummary): string {
+  if (session.purpose === 'exam') return 'prova';
+  if (session.purpose === 'training') {
+    return `treino · ${LIGHTS.find((l) => l.key === session.light)?.label ?? '?'}`;
+  }
+  return 'sem tipo';
 }
 
 function title(session: CollectionSummary): string {

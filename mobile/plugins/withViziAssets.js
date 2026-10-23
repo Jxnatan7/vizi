@@ -17,8 +17,9 @@ const ASSETS = [
   { from: 'models/vizi-seg.mlpackage', to: 'vizi-seg.mlpackage', dir: true },
   { from: 'assets/reference.jpg', to: 'reference.jpg', dir: false },
   // O formato do zip da coleta (spec 007, R44). O contrato da spec É o arquivo
-  // que vai dentro de todo zip exportado: uma cópia só, que não diverge.
-  { from: 'specs/007-modo-coleta/contracts/zip-format.md', to: 'FORMAT.md', dir: false },
+  // que vai dentro de todo zip exportado: uma cópia só, que não diverge. Desde
+  // a 008 (R57), a cópia viva é a dela — a da 007 fica como a 007 entregou.
+  { from: 'specs/008-coleta-treino/contracts/zip-format.md', to: 'FORMAT.md', dir: false },
 ];
 
 module.exports = function withViziAssets(config) {

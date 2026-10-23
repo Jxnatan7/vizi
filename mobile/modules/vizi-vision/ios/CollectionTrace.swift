@@ -48,6 +48,8 @@ enum CollectionTrace {
     var transform: String
     var side: Int
     var maskCoeffCount: Int
+    /// A escolha da câmera no toque (spec 008), gravada como chegou.
+    var tags: [String: Any]?
   }
 
   /// A releitura de uma captura (spec 006), para o registro.
@@ -85,6 +87,8 @@ enum CollectionTrace {
     /// O que a tela recebeu.
     var result: [String: Any]
     var timings: [String: Any]
+    /// A escolha da câmera no toque (spec 008), gravada como chegou.
+    var tags: [String: Any]?
   }
 
   /// Os campos que todo item tem.
@@ -162,6 +166,7 @@ enum CollectionTrace {
     item["displayedCount"] = m.displayedCount.map { $0 as Any } ?? NSNull()
     item["frameCount"] = m.frameCount
     item["presentationTime"] = m.frame.presentationSeconds
+    if let tags = m.tags { item["tags"] = tags }
     item["recordMs"] = (CFAbsoluteTimeGetCurrent() - started) * 1000
     bytes += try CollectionWriter.writeJSON(item, to: folder.appendingPathComponent("item.json"))
     return bytes
@@ -187,8 +192,10 @@ enum CollectionTrace {
       bytes += written.bytes
     }
     if let crop = c.crop {
+      // Sobre preto: a cunha fora da foto é transparente no buffer, e o JPEG a
+      // achataria em branco. A releitura a vê preta (spec 008, R50).
       let written = try CollectionWriter.writeJPEG(
-        crop, named: "crop.jpg", in: folder, quality: quality, upright: false)
+        crop, named: "crop.jpg", in: folder, quality: quality, upright: false, overBlack: true)
       images["crop"] = written.dictionary
       bytes += written.bytes
     }
@@ -254,6 +261,7 @@ enum CollectionTrace {
     item["reread"] = reread
     item["result"] = c.result
     item["timings"] = c.timings
+    if let tags = c.tags { item["tags"] = tags }
     item["recordMs"] = (CFAbsoluteTimeGetCurrent() - started) * 1000
     bytes += try CollectionWriter.writeJSON(item, to: folder.appendingPathComponent("item.json"))
     return bytes

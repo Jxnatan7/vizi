@@ -2,8 +2,12 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { CollectionState } from '../../modules/vizi-vision';
+import { LIGHTS } from '../collection/policy';
 import { formatElapsed, formatMegabytes } from './format';
 import type { Palette } from './theme';
+
+/** O que a última captura de treino deixou: gravada, ou por que não (spec 008, FR-006). */
+export type CollectionNote = { text: string; bad: boolean };
 
 /**
  * O modo coleta gravando (spec 007, FR-002): ponto, tempo, marcas, capturas e
@@ -13,7 +17,9 @@ import type { Palette } from './theme';
  * segundo (R46). O princípio III proíbe estado de React por quadro; um segundo
  * é cromo. O resto chega pelo `onCollectionChange`, a cada item.
  */
-export function CollectionIndicator({ c, state }: { c: Palette; state: CollectionState }) {
+export function CollectionIndicator({ c, state, note }: {
+  c: Palette; state: CollectionState; note?: CollectionNote | null;
+}) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -22,7 +28,11 @@ export function CollectionIndicator({ c, state }: { c: Palette; state: Collectio
   }, []);
 
   const elapsed = state.startedAt ? Math.max(0, now - state.startedAt) : 0;
-  const summary = `${state.marks} ${state.marks === 1 ? 'marca' : 'marcas'} · `
+  // O tipo vem primeiro: gravar no treino o que era da prova é o erro a não cometer.
+  const kind = state.purpose === 'training'
+    ? `treino · ${LIGHTS.find((l) => l.key === state.light)?.label ?? ''} · `
+    : state.purpose === 'exam' ? 'prova · ' : '';
+  const summary = kind + `${state.marks} ${state.marks === 1 ? 'marca' : 'marcas'} · `
     + `${state.captures} ${state.captures === 1 ? 'captura' : 'capturas'} · `
     + formatMegabytes(state.bytes);
 
@@ -42,6 +52,9 @@ export function CollectionIndicator({ c, state }: { c: Palette; state: Collectio
       )}
       {state.lastError && (
         <Text style={[styles.note, { color: c.crit }]}>Não gravou — {state.lastError}</Text>
+      )}
+      {note && (
+        <Text style={[styles.note, { color: note.bad ? c.crit : c.ok }]}>{note.text}</Text>
       )}
     </View>
   );
