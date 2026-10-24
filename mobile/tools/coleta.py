@@ -14,13 +14,16 @@
 
     uv run tools/coleta.py pacote <zip ou pasta>… --saida <pasta> [opções]
     uv run tools/coleta.py prova  <zip ou pasta>…
+    uv run tools/coleta.py limpar <dataset.zip do Roboflow> --saida <dataset-limpo.zip>
 
 `pacote` transforma sessões de treino numa pasta que o Roboflow importa
 arrastando: as imagens que o modelo lê no app, com o contorno de cada livro
 que o app achou, para a pessoa corrigir em vez de desenhar. O contorno é
 redesenhado pelo SAM a partir da caixa de cada livro — a máscara do app tem
 160×160 e erra o topo dos livros (research, R58). `prova` mede o app
-contra o inventário numa sessão de prova.
+contra o inventário numa sessão de prova. `limpar` tira de um dataset exportado
+do Roboflow as marcações que se contradizem — estojo ou grupo marcado junto
+com os livros, o mesmo livro duas vezes, fragmentos (research, R60).
 
 O contrato está em specs/008-coleta-treino/contracts/ferramentas.md; o formato
 do zip, em specs/008-coleta-treino/contracts/zip-format.md — o FORMAT.md que
@@ -28,6 +31,7 @@ vai dentro de todo zip.
 """
 
 import argparse
+import collections
 import io
 import json
 import os
@@ -259,10 +263,16 @@ def homography(src, dst):
     return np.append(np.linalg.solve(np.asarray(a, float), np.asarray(b, float)), 1).reshape(3, 3)
 
 
-def crop_square(session, item_id, item, side):
+def crop_square(session, item_id, item, side, rebuild_wedge):
     """O recorte encaixado num quadrado de `side`, centrado, com preto em volta:
     a mesma conta do FrameTransform.fit, que o Roboflow reduz a 640 sem
-    distorcer. A cunha fora da foto sai preta, como a releitura a vê (R50)."""
+    distorcer (R50).
+
+    Desde a 008 o app grava a cunha fora da foto já preta, como a releitura a
+    vê. Antes, branca: `rebuild_wedge` a refaz levando os cantos do recorte aos
+    de `sourceQuad`. É uma aproximação — o endireitamento do app não é esse
+    mapa —, que acertou nas capturas de 20/10 e erra em outras; a conferência
+    (SC-003) recusa a imagem quando erra."""
     crop = session.image(f"items/{item_id}/{item['images']['crop']['file']}").convert("RGB")
     w0, h0 = crop.size
     k = side / max(w0, h0)
@@ -271,7 +281,7 @@ def crop_square(session, item_id, item, side):
 
     quad = (item.get("geometry") or {}).get("sourceQuad") or []
     photo = item["images"].get("photo")
-    if len(quad) == 4 and photo:
+    if rebuild_wedge and len(quad) == 4 and photo:
         hm = homography([(0, 0), (w0, 0), (w0, h0), (0, h0)], quad)
         ys, xs = np.mgrid[0:h, 0:w]
         pts = np.stack([(xs + 0.5) / k, (ys + 0.5) / k, np.ones_like(xs, float)], -1) @ hm.T
@@ -450,7 +460,7 @@ def cmd_pacote(args):
 
             if has_crop and not background:
                 name = image_name(s, item_id, tags, "recorte")
-                canvas, crop_size = crop_square(s, item_id, item, args.lado)
+                canvas, crop_size = crop_square(s, item_id, item, args.lado, rebuild_wedge=s.purpose is None)
                 problem = check_crop(canvas, crop_size, s, item_id, item)
                 if problem:
                     rejected.append(f"{name}: {problem}")
@@ -577,6 +587,110 @@ def cmd_prova(args):
     return 0
 
 
+# ── limpar ────────────────────────────────────────────────────────────────
+
+CLEAN_RASTER = 640       # os rótulos são normalizados; 640 é o lado do dataset
+CLEAN_INSIDE = 0.7       # fração do menor dentro do maior que faz um par
+CLEAN_BOOKLIKE = 0.75    # área / retângulo mínimo: lombada, capa, livro deitado
+
+
+def box_to_polygon(parts):
+    """`classe cx cy w h` vira o retângulo em quatro cantos.
+
+    O Roboflow exporta a marcação feita como caixa só com a caixa, e a
+    Ultralytics, num rótulo que também tem polígonos, lê essas quatro
+    coordenadas como dois pontos de um polígono — a caixa errada e uma máscara
+    vazia (R60)."""
+    c, cx, cy, w, h = parts[0], *map(float, parts[1:5])
+    x0, y0, x1, y1 = cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2
+    return " ".join([c] + [f"{v:.6f}" for v in (x0, y0, x1, y0, x1, y1, x0, y1)])
+
+
+def clean_labels(text):
+    """As linhas de um rótulo YOLOv8-seg sem as marcações que se contradizem, e
+    o que saiu, por tipo. Marcação só com caixa vira retângulo antes. Repetida
+    até não sobrar par: para cada contorno, os menores que estão
+    `CLEAN_INSIDE` ou mais dentro dele —
+      * dois ou mais com forma de livro: ele é um grupo ou um estojo — sai ele;
+      * os de dentro sem forma de livro são fragmentos — saem;
+      * um com forma de livro é o mesmo livro de novo — sai o menor."""
+    lines = [l for l in text.splitlines() if l.strip()]
+    removed = collections.Counter()
+    for k, line in enumerate(lines):
+        if len(line.split()) == 5:
+            lines[k] = box_to_polygon(line.split())
+            removed["caixa virou retângulo"] += 1
+    polys = [np.array(l.split()[1:], float).reshape(-1, 2) if len(l.split()) >= 7 else None for l in lines]
+    keep = [True] * len(lines)
+    masks, areas, boxes, booklike = [], [], [], []
+    for p in polys:
+        if p is None:
+            masks.append(None); areas.append(0); boxes.append(None); booklike.append(False)
+            continue
+        q = (p * CLEAN_RASTER).astype(np.float32)
+        m = np.zeros((CLEAN_RASTER, CLEAN_RASTER), np.uint8)
+        cv2.fillPoly(m, [q.round().astype(np.int32)], 1)
+        masks.append(m.astype(bool)); areas.append(int(m.sum())); boxes.append((p.min(0), p.max(0)))
+        (_, _), (w, h), _ = cv2.minAreaRect(q)
+        booklike.append(w * h > 0 and cv2.contourArea(q) / (w * h) >= CLEAN_BOOKLIKE)
+
+    def overlaps(i, j):
+        (a0, a1), (b0, b1) = boxes[i], boxes[j]
+        return bool((a0 < b1).all() and (b0 < a1).all())
+
+    while True:
+        alive = [i for i in range(len(lines)) if keep[i] and areas[i] > 0]
+        inside = {i: [j for j in alive if j != i and areas[j] <= areas[i] and overlaps(i, j)
+                      and (masks[i] & masks[j]).sum() / areas[j] >= CLEAN_INSIDE] for i in alive}
+        groups = [i for i in alive if sum(booklike[j] for j in inside[i]) >= 2]
+        if groups:
+            keep[max(groups, key=lambda i: areas[i])] = False
+            removed["grupo ou estojo"] += 1
+            continue
+        target = next((i for i in sorted(alive, key=lambda i: -areas[i]) if inside[i]), None)
+        if target is None:
+            break
+        for j in inside[target]:
+            keep[j] = False
+            removed["duplicata" if booklike[j] else "fragmento"] += 1
+    return [l for l, k in zip(lines, keep) if k], removed
+
+
+def cmd_limpar(args):
+    src = Path(args.dataset)
+    out = Path(args.saida)
+    if out.exists():
+        print(f"{out} já existe: escolha outro nome.", file=sys.stderr)
+        return 2
+    total, files_changed, removed = 0, 0, collections.Counter()
+    seen = set()
+    started = time.time()
+    with zipfile.ZipFile(src) as zin, zipfile.ZipFile(out, "w") as zout:
+        for info in zin.infolist():
+            # O Roboflow repete o data.yaml dentro do zip: uma cópia basta.
+            if info.filename in seen or info.is_dir():
+                continue
+            seen.add(info.filename)
+            data = zin.read(info)
+            if "/labels/" in f"/{info.filename}" and info.filename.endswith(".txt"):
+                lines = data.decode().splitlines()
+                kept, gone = clean_labels(data.decode())
+                total += len([l for l in lines if l.strip()])
+                if gone:
+                    files_changed += 1
+                    removed.update(gone)
+                zout.writestr(info.filename, "\n".join(kept) + ("\n" if kept else ""), zipfile.ZIP_DEFLATED)
+            else:
+                # JPEG já é comprimido: guardar sem recomprimir é mais rápido.
+                zout.writestr(info.filename, data, zipfile.ZIP_STORED)
+    converted = removed.pop("caixa virou retângulo", 0)
+    print(f"{out}: {total} marcações · {converted} caixas viraram retângulo · "
+          f"{sum(removed.values())} removidas ({dict(removed)}) · {files_changed} rótulos alterados · "
+          f"{time.time() - started:.0f} s")
+    print("As imagens são as mesmas. O que não é livro e está marcado sozinho continua: isso é no Roboflow.")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="comando", required=True)
@@ -596,6 +710,11 @@ def main():
     p.add_argument("--sem-sam", action="store_true",
                    help="contornos da máscara do app, sem o SAM: rápido, mas grosseiro no topo dos livros")
     p.set_defaults(run=cmd_pacote)
+
+    p = sub.add_parser("limpar", help="dataset do Roboflow sem marcações que se contradizem")
+    p.add_argument("dataset", help="o zip exportado do Roboflow, no formato YOLOv8")
+    p.add_argument("--saida", required=True, help="o zip limpo a criar")
+    p.set_defaults(run=cmd_limpar)
 
     p = sub.add_parser("prova", help="a contagem do app contra o inventário")
     p.add_argument("entradas", nargs="+", help="zips de prova, ou as pastas extraídas")

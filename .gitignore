@@ -36,4 +36,22 @@ AltServerData/
 # Estado local do Expo/Metro
 .expo/
 
+# Coleta e treino do modelo (spec 008) — grande, local e refeito sob demanda.
+# O repositório recebe só o modelo exportado, em mobile/models/vizi-seg.mlpackage.
+
+# Sessões do modo coleta extraídas e pacotes para o Roboflow
 vizi-coleta*
+vizi-pacote*
+
+# Datasets, exports e resultados baixados do Roboflow, Colab e SageMaker
+/*.zip
+/*.mlpackage
+/vizi-seg/
+/train-*/
+
+# Pesos de treino (.pt) e saídas da Ultralytics
+*.pt
+runs/
+
+# Notebooks
+.ipynb_checkpoints/

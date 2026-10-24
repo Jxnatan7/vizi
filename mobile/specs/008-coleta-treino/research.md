@@ -56,6 +56,11 @@ libera o que esperava resposta (R43).
 a releitura de 10 a 71 ms. Somando a volta pela ponte, a câmera volta perto de
 1 s depois do toque. O SC-001 pede menos de 1,5 s.
 
+**Medido em 23/10** (270 capturas de treino): mediana de `toque → pronto`
+700 ms; com a releitura, acima de 1,45 s em 9; o autor capturou de novo até
+0,93 s depois da anterior. Gravar custa ~400 ms por captura, em segundo plano,
+como na 007 — compor o recorte sobre preto não pesou.
+
 **O que se vê.** A imagem endireitada pode aparecer por um ou dois quadros
 entre `showStill` e a volta. Não é o resultado — é o que custa não mudar o
 nativo, e não muda o que é gravado.
@@ -114,9 +119,14 @@ volta, pela mesma conta do `FrameTransform.fit` — e reduzindo a 640:
    `crop.jpg` fica sendo o que a releitura leu, em resolução cheia. É um
    conserto da 007; o formato não muda de versão, e o `FORMAT.md` registra a
    mudança.
-2. **A ferramenta refaz a cunha pela geometria**, sempre: a homografia leva
-   os cantos do recorte a `geometry.sourceQuad`, e o que cai fora da foto vira
-   preto. Isso conserta as sessões anteriores e não muda nada nas novas.
+2. **A ferramenta refaz a cunha das sessões anteriores pela geometria**: a
+   homografia leva os cantos do recorte a `geometry.sourceQuad`, e o que cai
+   fora da foto vira preto. **Corrigido em 23/10:** é só uma aproximação. Nas
+   270 capturas das sessões de 23/10 ela errou em 70 — pintava de preto parte
+   dos livros —, porque o endireitamento não é esse mapa; nenhuma ordem dos
+   cantos reproduz a cunha. Nas sessões da 008 o app já grava a cunha preta e
+   a ferramenta não a refaz (270 de 270 passam na conferência); nas anteriores
+   refaz, e a conferência recusa onde errar — nas 12 de 20/10, acertou.
 3. **A imagem vai em 2048×2048**, com o recorte encaixado como na releitura.
    O Roboflow a reduz a 640 sem distorcer — um quadrado continua quadrado —, e
    a pessoa marca com três vezes a resolução que o modelo vê.
@@ -320,6 +330,41 @@ sem contorno, o pacote leva segundos. O contorno do app, com ou sem SAM, segue
 disponível sem a opção.
 
 [rf-find]: https://docs.roboflow.com/changelog/explore-by-month/november-2025/find-objects-with-ai-annotation-tool
+
+---
+
+## R60 — Limpar o dataset antes de treinar
+
+**Achado, 23/10.** O primeiro retreino, com o dataset v3 do Roboflow (154
+fotos antigas e as 351 novas, cada uma do treino em 10 versões aumentadas),
+ficou inseguro: confiança das caixas de ~0,9 para 0,3–0,7, e duas caixas
+deslocadas por livro numa prateleira cheia. A auditoria do zip exportado achou
+dois defeitos, nas fotos antigas e nas novas:
+
+- **Marcações que se contradizem.** Estojo marcado junto com os livros de
+  dentro (a caixa do Harry Potter, a da Holly Black), um contorno em volta de
+  um grupo além dos contornos de cada livro, o mesmo livro duas vezes,
+  fragmentos recortados dentro de um livro. 47% das fotos antigas e 34% das
+  novas tinham ao menos um par de contornos com 70% ou mais do menor dentro do
+  maior.
+- **Marcação só com caixa.** 2.585 linhas `classe cx cy w h`, sem polígono,
+  em 1.133 rótulos — quase todas de fotos novas. Num rótulo que também tem
+  polígonos, a Ultralytics lê essas quatro coordenadas como dois pontos de um
+  polígono: a caixa vira outra, e a máscara, vazia. Elas entraram no treino
+  como lixo.
+
+**Decisão.** `coleta.py limpar` gera uma cópia do zip: caixa vira retângulo;
+contorno que contém dois ou mais com forma de livro (área ≥ 75% do retângulo
+mínimo) sai como grupo ou estojo; os de dentro sem forma de livro saem como
+fragmento; um de dentro com forma de livro sai como duplicata. No v3: 2.585
+caixas convertidas e 4.812 marcações removidas (314 grupos, 1.164 duplicatas,
+3.334 fragmentos), em 2 min. A primeira tentativa, que decidia "grupo" pela
+área coberta, apagava os livros de dentro do estojo do Harry Potter e foi
+descartada.
+
+**O que a limpeza não faz.** Não-livro marcado sozinho — a capa do estojo da
+Ferrante, a peça clara ao lado da luminária, um caderno espiral numa foto
+antiga — e livro sem marcação. Isso é no Roboflow.
 
 ---
 

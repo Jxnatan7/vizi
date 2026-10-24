@@ -211,7 +211,7 @@ A luz e o tipo são da sessão (`light`, `purpose`).
 | `fieldOfViewDegrees`, `focal` | da câmera e no espaço canônico |
 | `horizon` | reta homogênea `[a, b, c]`, ou `null` |
 | `verticalVP`, `horizontalVP` | pontos de fuga homogêneos `[x, y, w]`, ou `null` |
-| `sourceQuad` | os quatro cantos do recorte na foto — os cantos superior esquerdo, superior direito, inferior direito e inferior esquerdo do `crop.jpg`, nessa ordem —, ou `[]`. Podem cair fora da foto: aí o recorte tem uma cunha sem imagem, abaixo |
+| `sourceQuad` | os quatro cantos do recorte na foto, ou `[]`. Podem cair fora da foto: aí o recorte tem uma cunha sem imagem, abaixo |
 | `books` | onde os livros ficam no recorte, `[x, y, largura, altura]` de 0 a 1 |
 | `fullyRectified` | `true` com perspectiva corrigida; `false` no recuo de só rotação |
 | `rows` | fileiras da foto, cada uma uma lista de `anchor` |
@@ -231,11 +231,10 @@ A luz e o tipo são da sessão (`light`, `purpose`).
 **A cunha fora da foto.** Quando um canto de `sourceQuad` cai fora da foto, o
 recorte tem uma região sem imagem. A releitura a vê preta — o recorte é
 composto sobre preto. Desde a spec 008, o `crop.jpg` a grava preta também e é,
-em resolução cheia, a imagem que a releitura leu. **Antes, ela saía branca**:
-para refazê-la, leve cada pixel do `crop.jpg` à foto pela homografia que manda
-os cantos `(0, 0)`, `(W, 0)`, `(W, H)` e `(0, H)` do recorte nos cantos de
-`sourceQuad`, e pinte de preto o que cair fora de `[0, largura] × [0, altura]`
-da foto.
+em resolução cheia, a imagem que a releitura leu. **Antes, ela saía branca**, e
+não há como refazê-la exatamente a partir dos dados: o endireitamento não é o
+mapa dos quatro cantos do recorte para `sourceQuad`. O `reread-square.jpg`
+mostra onde ela está.
 
 ## `truth.json`
 

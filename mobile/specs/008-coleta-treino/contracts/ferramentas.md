@@ -91,6 +91,17 @@ vez. Cada imagem imprime uma linha ao terminar: são de 6 a 12 s na CPU.
 de foto e sem livros, quantos contornos e quantos descartados como duplicata;
 e as imagens recusadas, com o motivo.
 
+## `limpar`
+
+```bash
+uv run mobile/tools/coleta.py limpar dataset.zip --saida dataset-limpo.zip
+```
+
+Lê o zip exportado do Roboflow (YOLOv8) e grava outro com as mesmas imagens e
+os rótulos limpos (R60): caixa vira retângulo; sai o contorno de grupo ou
+estojo, a duplicata e o fragmento. O `data.yaml` repetido pelo Roboflow vai uma
+vez. Recusa se a saída já existir.
+
 ## `prova`
 
 Recusa o que não for prova (R55). Imprime:

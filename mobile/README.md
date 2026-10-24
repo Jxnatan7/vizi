@@ -13,7 +13,7 @@ App React Native + Expo de detecção e segmentação em tempo real, on-device.
 | **005 · Faixa de interesse** | 🟡 código completo, faltam dois portões no aparelho | 41 de 44 |
 | **006 · Releitura do recorte** | 🟡 código completo, sem build, falta o aparelho | 20 de 26 |
 | **007 · Modo coleta** | 🟡 código completo, sem build, falta o aparelho | 34 de 41 |
-| **008 · Coleta para treino e prova** | 🟡 código completo, sem build, falta o aparelho | 27 de 33 |
+| **008 · Coleta para treino e prova** | 🟡 código completo, sem build, falta o aparelho | 28 de 34 |
 | Acabamento e adaptação | — | |
 | Android | — | |
 
@@ -204,6 +204,7 @@ para treinar com fotos da casa e medir numa prova que nunca entra no treino.
 uv run tools/coleta.py pacote <zip>… --saida <pasta> --so-imagens   # o Roboflow marca
 uv run tools/coleta.py pacote <zip>… --saida <pasta> [--previa <pasta>]   # contornos prontos
 uv run tools/coleta.py prova <zip>…
+uv run tools/coleta.py limpar dataset.zip --saida dataset-limpo.zip   # antes de treinar
 ```
 
 **Escrita em 22/10, ainda sem build.** A ferramenta já roda nas sessões de
